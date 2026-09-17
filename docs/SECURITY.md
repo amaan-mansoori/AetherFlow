@@ -1,0 +1,35 @@
+# Security Requirements
+
+**Status:** Architecture / Specification Phase
+
+## Principles
+
+Least privilege, deny by default, explicit authorization, defense in depth, secure defaults, auditable mutations, and fail closed for authentication/authorization decisions.
+
+## Identity and secrets
+
+Passwords use a current memory-hard password hashing configuration. JWT signing keys, database credentials, broker credentials, Redis credentials, and provider keys come from environment-specific secret management, never source control. API keys are shown once and stored only as a secure hash plus non-secret metadata.
+
+Phase 2 uses Argon2id through `argon2-cffi` for passwords. Access JWTs are signed with an environment-provided secret and expire after a configurable short lifetime (15 minutes by default). Refresh credentials are random opaque values, stored as SHA-256 hashes, rotated on use, and revoked on logout or reuse detection. Browser refresh credentials are `HttpOnly`, `SameSite=Strict`, path-scoped cookies; `Secure` is required in production. Bearer access tokens remain appropriate for API clients.
+
+## Input and output
+
+Validate sizes, types, models, timeouts, priorities, metadata, and structured output schemas. Use parameterized database operations. AI output is untrusted data: it is escaped for UI display and never interpreted as HTML, SQL, shell, URL, or executable code. The AI system cannot execute arbitrary shell commands.
+
+## Web/API controls
+
+Enforce authentication and object-level authorization on every protected resource. Define CORS narrowly. Choose cookie or header transport deliberately and apply CSRF protection when browser credentials are automatically attached. Apply rate limits and request size limits before expensive processing.
+
+Phase 2 separates authentication dependencies from authorization policies. `USER` is assigned during registration; `ADMIN` is database-backed and cannot be self-assigned. A request cannot provide both bearer and API-key credentials. Cookie-based refresh endpoints are same-site and path-scoped; a future cross-site browser deployment must add an explicit CSRF token/origin policy rather than weakening cookie settings.
+
+Identity request schemas reject unknown fields, including attempted client-controlled role fields, and reject blank API-key names. CORS is allowlist-based and explicitly permits only the implemented methods and authentication headers.
+
+## Logging
+
+Redact authorization headers, API keys, passwords, provider credentials, raw prompts/outputs when sensitive, and personal data according to configuration. Log stable identifiers, classifications, and hashes/fingerprints rather than secrets. Audit security-sensitive actions.
+
+Security audit events cover registration, successful/failed login, refresh creation/rotation/reuse failure, logout, API-key creation/revocation, and authorization denial. Audit context contains only safe metadata such as public key ID and reason.
+
+## Supply chain and containers
+
+Pin and review dependencies, scan dependencies and images in CI where practical, use minimal non-root images, read-only filesystems where feasible, drop Linux capabilities, and avoid privileged containers.
