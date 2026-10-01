@@ -56,6 +56,11 @@ adapter and are never persisted in jobs, attempts, events, Kafka payloads,
 metrics, API responses, or exception messages. Provider request and response
 bodies are not logged.
 
+Phase 10 review found no tracked `.env` file or provider secret in the
+application configuration. Compose uses environment substitution and does not
+contain a real credential. Infrastructure log validation is **UNVERIFIED**
+because the Docker runtime could not be started.
+
 ## Supply chain and containers
 
 Pin and review dependencies, scan dependencies and images in CI where practical, use minimal non-root images, read-only filesystems where feasible, drop Linux capabilities, and avoid privileged containers.

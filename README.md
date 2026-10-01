@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 9 - Real provider integration and production validation**
+> **Current status: Phase 10 - Production validation and reliability verification**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -15,11 +15,13 @@ verified unless a broker is available. Real external providers, execution
 Phase 6 adds deterministic bounded execution retry, durable future retry
 dispatch intents, and cancellation-safe failure recovery. Phase 7 adds
 process-local Prometheus-compatible metrics and dependency-aware health checks.
-Phase 9 adds an isolated OpenAI-compatible provider adapter. The deterministic
-mock remains the default and no provider credential is stored in jobs, Kafka,
-logs, metrics, or API responses. External Prometheus storage, dashboards,
-alerting, Redis, frontend, Kubernetes, and real-provider validation remain
-environment-dependent.
+Phase 9 adds an isolated OpenAI-compatible provider adapter. Phase 10 validates
+what can be executed locally and distinguishes deterministic verification from
+infrastructure-dependent verification. The deterministic mock remains the
+default and no provider credential is stored in jobs, Kafka, logs, metrics, or
+API responses. In the current environment Docker's Linux engine is unavailable,
+so PostgreSQL/Kafka/Compose E2E and real-provider smoke validation are
+unverified.
 
 ## Local production-like Compose stack
 
@@ -79,3 +81,8 @@ ruff check backend
 mypy backend/src
 pytest backend/tests
 ```
+
+Phase 10 verification status is documented in
+`docs/adr/0019-production-validation-and-e2e-verification.md` and the
+development log. The unit suite, static checks, and isolated migration checks
+are deterministic; they are not evidence of PostgreSQL or Kafka integration.

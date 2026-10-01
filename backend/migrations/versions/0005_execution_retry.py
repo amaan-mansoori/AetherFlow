@@ -151,3 +151,8 @@ def downgrade() -> None:
         "outbox_dispatches",
         ["published_at", "created_at"],
     )
+    op.create_index(
+        "ix_outbox_retry_eligibility",
+        "outbox_dispatches",
+        ["publication_state", "next_attempt_at", "created_at"],
+    )

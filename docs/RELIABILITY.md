@@ -142,3 +142,10 @@ scheduled retry; a due cancellation message is consumed only to complete
 acknowledged as ineligible. Retry exhaustion transitions to `FAILED`. Publication and
 execution remain at least once, and provider-side work may still occur more
 than once.
+## Phase 10 validation status
+
+Deterministic tests cover idempotency, stale versions, duplicate dispatch,
+retry scheduling, lease recovery, cancellation, and resource shutdown. Real
+PostgreSQL row-locking, Kafka offset/restart behavior, concurrent publisher
+claims, and the complete Compose path are **UNVERIFIED** because Docker's
+Linux engine was unavailable. No exactly-once claim is made.

@@ -97,3 +97,12 @@ not prove PostgreSQL `FOR UPDATE SKIP LOCKED` or Kafka consumer concurrency.
 Tests verify Prometheus exposition, HTTP status classes and normalized routes,
 bounded metric labels, and distinct liveness/readiness behavior. They do not
 claim external Prometheus scraping or infrastructure-level telemetry.
+
+## Phase 10 production-like validation
+
+The complete pytest suite and static checks are deterministic validation.
+Compose-based PostgreSQL, Kafka, outbox, worker, shutdown, concurrency, and
+API-to-result E2E checks are run only when Docker is available; they are not
+substituted with SQLite or fake clients. Docker's Linux engine was unavailable
+in the current environment, so these checks are **UNVERIFIED**. Real-provider
+smoke testing is also **UNVERIFIED** because no credential was supplied.

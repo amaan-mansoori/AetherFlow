@@ -10,7 +10,7 @@
 - The mock provider is deterministic and must not be represented as model-quality evidence.
 - Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
 - No performance numbers are known at this phase.
-- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, Redis, external providers, frontend, and deployment infrastructure remain deferred.
+- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, Redis, frontend, and cloud deployment remain deferred.
 - Phase 6 adds durable execution retry for bounded retryable provider failures;
   there is still no retry API action, operator replay workflow, or provider-call
   resumption after a process crash.
@@ -25,7 +25,8 @@
 - Phase 4B introduced the Kafka adapter; Phase 4C moved publication behind the
   durable outbox. Kafka broker integration and PostgreSQL concurrency remain
   unverified in this environment.
-- A worker runtime entrypoint/deployment is not yet provided; `KafkaWorkerRunner` is the explicit integration boundary for a later worker process. The API does not consume Kafka.
+- The worker and outbox publisher have independent runtime entrypoints, but
+  their real broker/database behavior remains environment-gated.
 - Phase 4C closes the database job/dispatch-intent gap but does not provide a distributed transaction with Kafka. A crash after Kafka publication and before outbox finalization can publish a duplicate. PostgreSQL `SKIP LOCKED` behavior is not verified in the current environment.
 - Phase 4D/4E provides bounded retry scheduling for dispatch publication. It
   intentionally does not add a DLQ, operator replay API, or scheduler.
@@ -37,3 +38,7 @@
   credentials and smoke validation remain environment-dependent. Phase 6 execution
   retry is locally tested with SQLite and deterministic fakes; PostgreSQL row
   locking and Kafka broker behavior remain unverified.
+- Phase 10 deterministic checks passed, but Docker's Linux engine was
+  unavailable. PostgreSQL/Kafka Compose startup, API-to-result E2E, runtime
+  restart recovery, infrastructure concurrency, and shutdown observation are
+  therefore **UNVERIFIED**, not successful production validation.

@@ -123,3 +123,14 @@ remain environment-gated.
 
 Execution retries are locally verified with SQLite/local dispatch. PostgreSQL
 and Kafka integration/concurrency remain environment-gated.
+
+## Phase 10 validation mapping
+
+| Validation area | Evidence | Status |
+|---|---|---|
+| Existing unit/API/reliability suite | `backend/tests`, 115 passed | VERIFIED |
+| Formatting, lint, typing, diff checks | Ruff, mypy, `git diff --check` | VERIFIED |
+| Migration lifecycle | Isolated SQLite upgrade check | VERIFIED |
+| PostgreSQL/Kafka/Compose E2E | Docker Linux engine unavailable | UNVERIFIED |
+| Real provider smoke | No credential supplied | UNVERIFIED |
+| Infrastructure concurrency/restart/shutdown | Requires PostgreSQL and Kafka runtime | UNVERIFIED |

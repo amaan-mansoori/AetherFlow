@@ -205,3 +205,17 @@ API replicas scale on request load; worker replicas scale by Kafka consumer-grou
 ## Deployment
 
 The production cloud is an open decision until Phase 1 constraints and cost are reviewed. Only one provider will be selected. Kubernetes manifests will be the initial deployment format; Helm is deferred unless repeated environment templating proves its value.
+
+## Phase 10 validation status
+
+The intended production-like path remains:
+
+```text
+API -> PostgreSQL -> transactional outbox -> OutboxPublisher -> Kafka
+    -> Worker -> ProviderExecutor -> PostgreSQL result/state -> acknowledgement
+```
+
+Phase 10 does not change this architecture. Docker's Linux engine was
+unavailable during validation, so the PostgreSQL/Kafka runtime path and
+Compose E2E are **UNVERIFIED**. Existing SQLite/fake-client tests remain
+deterministic component verification only.
