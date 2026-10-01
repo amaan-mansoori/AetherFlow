@@ -165,7 +165,7 @@ async def test_provider_failure_is_durable_and_acknowledged_after_decision(app) 
 
     result = await worker.run_once()
 
-    assert result.status == WorkerResultStatus.FAILED
+    assert result.status == WorkerResultStatus.RETRY_SCHEDULED
     assert result.error_kind == ExecutionFailureKind.RATE_LIMIT
     async with app.state.session_factory() as session:
         attempt = await session.scalar(select(JobAttempt).where(JobAttempt.job_id == job.id))
@@ -190,7 +190,7 @@ async def test_worker_timeout_is_durable(app) -> None:
     await dispatcher.dispatch(message_for(job))
     result = await Worker(app.state.session_factory, dispatcher, HangingExecutor()).run_once()
 
-    assert result.status == WorkerResultStatus.FAILED
+    assert result.status == WorkerResultStatus.RETRY_SCHEDULED
     assert result.error_kind == ExecutionFailureKind.TIMEOUT
 
 

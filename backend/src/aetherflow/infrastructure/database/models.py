@@ -264,14 +264,14 @@ class JobEvent(Base):
 
 
 class OutboxDispatch(Base):
-    """Immutable dispatch intent and mutable publication metadata."""
+    """Durable dispatch intent and mutable publication metadata."""
 
     __tablename__ = "outbox_dispatches"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     message_type: Mapped[str] = mapped_column(String(64), default="JOB_DISPATCH")
     schema_version: Mapped[str] = mapped_column(String(32), default="v1")
-    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), unique=True)
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"))
     job_version: Mapped[int] = mapped_column(Integer)
     enqueued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
@@ -281,6 +281,7 @@ class OutboxDispatch(Base):
     last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_category: Mapped[str | None] = mapped_column(String(64))
     publication_state: Mapped[str] = mapped_column(String(32), default="PENDING")
+    available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     lease_owner: Mapped[str | None] = mapped_column(String(128))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
@@ -290,6 +291,12 @@ class OutboxDispatch(Base):
 
 Index("ix_jobs_user_created", Job.user_id, Job.created_at.desc())
 Index("ix_jobs_state_created", Job.state, Job.created_at)
+Index(
+    "uq_outbox_job_version",
+    OutboxDispatch.job_id,
+    OutboxDispatch.job_version,
+    unique=True,
+)
 Index(
     "ix_outbox_unpublished_created",
     OutboxDispatch.published_at,

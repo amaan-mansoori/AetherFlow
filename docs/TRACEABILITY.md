@@ -82,7 +82,7 @@ future-phase requirements.
 | Outbox publication/recovery | `jobs/outbox.py`, Kafka dispatcher | internal runtime only | outbox publication metadata | publication success/failure/recovery tests | RELIABILITY, TESTING |
 | Duplicate publication safety | existing Worker/CAS | none | jobs and outbox | duplicate dispatch tests | RELIABILITY, KNOWN-LIMITATIONS |
 
-Redis, scheduler, execution retries, external providers, admin operations,
+Redis, general scheduling, external providers, admin operations,
 frontend, and deployment remain future-phase requirements.
 
 ## Phase 4D/4E/4F implementation mapping
@@ -106,5 +106,17 @@ verification rather than claims made by SQLite/fake-client tests.
 | Execution timeout | `jobs/worker.py` | existing attempt/state/lease fields | timeout durability test | RELIABILITY, DATA-FLOW |
 | Provider credential protection | `JobCreateRequest`, runtime settings | no credential columns | schema rejection test | SECURITY, API |
 
-External provider transport and execution retry orchestration remain deferred;
-real PostgreSQL, Kafka, and external-provider verification are environment-gated.
+External provider transport remains deferred; real PostgreSQL, Kafka, and
+external-provider verification are environment-gated.
+
+## Phase 6 implementation mapping
+
+| Requirement | Component | Database | Test | Documentation |
+|---|---|---|---|---|
+| Centralized execution failure policy | `jobs/retry.py` | persisted job retry policy | policy classification/backoff tests | RELIABILITY, ADR-0015 |
+| Atomic retry scheduling | `jobs/service.py`, `jobs/worker.py` | attempt metadata, job state/version, retry outbox intent | retry persistence and exhaustion tests | DATABASE, DATA-FLOW |
+| Future retry dispatch | `jobs/outbox.py` | `available_at`, `(job_id, job_version)` uniqueness | eligibility and duplicate publication tests | ARCHITECTURE, RELIABILITY |
+| Cancellation/stale safety | state machine, outbox claim, worker CAS | versioned state and intent | cancellation, duplicate, stale tests | RELIABILITY, KNOWN-LIMITATIONS |
+
+Execution retries are locally verified with SQLite/local dispatch. PostgreSQL
+and Kafka integration/concurrency remain environment-gated.

@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 5 provider execution boundary implemented
+**Status:** Architecture / Specification Phase; Phase 6 execution retry implemented
 
 ## Decision summary
 
@@ -10,7 +10,7 @@ AetherFlow starts as a modular monolith with independently runnable API, schedul
 
 - **Next.js console:** authenticated operator and developer UI; consumes versioned API only.
 - **FastAPI API:** authentication, authorization, validation, idempotent submission, query APIs, cancellation, and operational endpoints.
-- **Scheduler:** identifies due queued/retry-scheduled jobs; initially co-located with API or worker deployment, later extractable.
+- **Retry dispatcher:** the existing outbox publisher identifies due retry intents; no general-purpose scheduler is introduced.
 - **Worker:** Kafka consumer-group process; claims jobs, calls provider abstraction, validates output, persists attempts/results, and emits lifecycle events.
 - **PostgreSQL:** authoritative users, jobs, attempts, results, events, workers, audit data, and idempotency records.
 - **Kafka:** durable job dispatch and lifecycle event transport; not current-state storage.
@@ -81,11 +81,11 @@ recoverable; PostgreSQL and Kafka are not a distributed transaction.
 
 ## Phase 4C transactional outbox
 
-`outbox_dispatches` contains one immutable dispatch intent per job, including
-job ID, submission-time job version, schema version, enqueue timestamp, and
-publication metadata. The unique job ID constraint prevents idempotent replay
-from creating a second intent. The `(published_at, created_at)` index supports
-oldest-unpublished scans.
+`outbox_dispatches` contains versioned dispatch intents. The initial
+submission intent and each execution retry intent use a unique `(job_id,
+job_version)` pair. Retry intents carry `available_at`; this keeps future
+publication durable without a second scheduler or an in-memory timer. The
+`(published_at, created_at)` index supports oldest-unpublished scans.
 
 `OutboxPublisher` uses `SELECT ... FOR UPDATE SKIP LOCKED` where supported,
 commits a lease before Kafka I/O, then publishes and finalizes the row in a
@@ -139,6 +139,27 @@ cancellation, and unexpected categories. Provider execution remains outside
 database transactions. Execution retry orchestration and external provider
 transport remain separate future decisions.
 
+## Phase 6 durable execution retry
+
+Phase 6 distinguishes dispatch publication retry from provider execution
+retry. `ExecutionRetryPolicy` centrally classifies failures: rate limits,
+timeouts, and transient provider failures are retryable; validation,
+authentication, permanent-provider, cancellation, unexpected internal errors,
+and legacy execution failures are terminal. The per-job retry policy supplies a
+bounded attempt budget and deterministic capped exponential backoff. Jitter is
+not applied.
+
+For a retryable failure, the worker atomically updates the failed attempt,
+clears the execution lease, transitions `RUNNING -> RETRY_SCHEDULED`, and
+creates a future outbox intent. The existing outbox publisher claims that
+intent only when `available_at` is due and the job version/state still match.
+The worker then processes `RETRY_SCHEDULED -> QUEUED -> RUNNING` through the
+existing CAS state machine. Cancellation can transition a scheduled retry to
+`CANCEL_REQUESTED`; the publisher may deliver the due intent only to let the
+worker complete cancellation, never execution.
+At-least-once publication and execution remain in force; this is not an
+exactly-once guarantee.
+
 ## Data and consistency
 
 The API transaction creates the job, idempotency record, and outbox intent
@@ -146,9 +167,13 @@ before publication. Publication failures leave an observable recoverable state.
 Job state transitions use compare-and-set predicates and short transactions,
 with row locks for claim-sensitive operations.
 
-## Scheduler and retry design
+## Retry dispatch design
 
-The scheduler scans only due `QUEUED` or `RETRY_SCHEDULED` work using indexed timestamps and claims a bounded batch. A deployment lease prevents duplicate scheduling when more than one scheduler runs. Retry delay is persisted with the job/attempt decision; the scheduler, not a busy worker loop, makes due work eligible. Exponential backoff has a configured cap and randomized jitter. A retry budget and maximum attempts prevent retry storms; poison messages are isolated and dead-lettered.
+The existing outbox publisher scans due retry intents using `available_at`.
+There is no general-purpose scheduler, deployment leader, or in-memory sleep
+loop. Job version/state matching prevents cancellation and stale retry intents
+from being published. Retry budgets are bounded; dead-letter redesign and
+operator replay remain deferred.
 
 ## Future Kafka event contract
 

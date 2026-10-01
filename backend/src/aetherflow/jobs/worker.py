@@ -1,6 +1,7 @@
 """Single-message worker orchestration with provider execution isolation."""
 
 import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -20,7 +21,9 @@ from aetherflow.jobs.execution import (
     ExecutionRequest,
     JobExecutor,
 )
+from aetherflow.jobs.retry import ExecutionRetryDecision, ExecutionRetryPolicy
 from aetherflow.jobs.service import (
+    finalize_execution_failure,
     record_job_attempt,
     record_job_result,
     transition_job_state,
@@ -33,6 +36,7 @@ class WorkerResultStatus(StrEnum):
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
     INELIGIBLE = "INELIGIBLE"
+    RETRY_SCHEDULED = "RETRY_SCHEDULED"
 
 
 @dataclass(frozen=True)
@@ -54,11 +58,13 @@ class Worker:
         dispatcher: JobDispatcher,
         executor: JobExecutor,
         worker_id: str = "local-worker",
+        now: Callable[[], datetime] = utc_now,
     ) -> None:
         self._session_factory = session_factory
         self._dispatcher = dispatcher
         self._executor = executor
         self._worker_id = worker_id
+        self._now = now
 
     async def run_once(self) -> WorkerResult:
         message = await self._dispatcher.receive()
@@ -132,7 +138,7 @@ class Worker:
         )
         job.execution_owner = self._worker_id
         job.execution_dispatch_version = message.job_version
-        job.execution_lease_until = utc_now() + timedelta(seconds=job.timeout_seconds + 30)
+        job.execution_lease_until = self._now() + timedelta(seconds=job.timeout_seconds + 30)
         attempt_number = len(job.attempts) + 1
         attempt = await record_job_attempt(
             session,
@@ -162,18 +168,18 @@ class Worker:
                 ExecutionFailureKind.TIMEOUT,
                 "Execution exceeded the configured timeout.",
             )
-            await self._finish_attempt(session, attempt.id, "FAILED", timeout_failure)
-            await self._clear_execution_lease(session, job.id)
-            await self._fail_job(session, job, timeout_failure)
+            retry_result = await self._finalize_failure(
+                session, job, attempt.id, attempt_number, timeout_failure
+            )
             return WorkerResult(
                 message.job_id,
-                WorkerResultStatus.FAILED,
+                retry_result,
                 attempt_number,
                 timeout_failure.kind,
             )
         except ExecutionFailure as failure:
-            await self._finish_attempt(session, attempt.id, "FAILED", failure)
             if failure.kind == ExecutionFailureKind.CANCELLATION:
+                await self._finish_attempt(session, attempt.id, "FAILED", failure)
                 await self._clear_execution_lease(session, job.id)
                 await self._cancel_after_execution_failure(session, job)
                 return WorkerResult(
@@ -182,22 +188,23 @@ class Worker:
                     attempt_number,
                     failure.kind,
                 )
-            await self._clear_execution_lease(session, job.id)
-            await self._fail_job(session, job, failure)
+            retry_result = await self._finalize_failure(
+                session, job, attempt.id, attempt_number, failure
+            )
             return WorkerResult(
                 message.job_id,
-                WorkerResultStatus.FAILED,
+                retry_result,
                 attempt_number,
                 failure.kind,
             )
         except Exception as exc:
             unexpected_failure = ExecutionFailure(ExecutionFailureKind.UNEXPECTED, str(exc))
-            await self._finish_attempt(session, attempt.id, "FAILED", unexpected_failure)
-            await self._clear_execution_lease(session, job.id)
-            await self._fail_job(session, job, unexpected_failure)
+            retry_result = await self._finalize_failure(
+                session, job, attempt.id, attempt_number, unexpected_failure
+            )
             return WorkerResult(
                 message.job_id,
-                WorkerResultStatus.FAILED,
+                retry_result,
                 attempt_number,
                 unexpected_failure.kind,
             )
@@ -223,6 +230,38 @@ class Worker:
             expected_version=current.version,
         )
         return WorkerResult(message.job_id, WorkerResultStatus.SUCCEEDED, attempt_number)
+
+    async def _finalize_failure(
+        self,
+        session: AsyncSession,
+        job: Job,
+        attempt_id: UUID,
+        attempt_number: int,
+        failure: ExecutionFailure,
+    ) -> WorkerResultStatus:
+        try:
+            policy = ExecutionRetryPolicy.from_job_configuration(job.retry_policy)
+            decision, delay = policy.decision_for(failure, attempt_number)
+        except ValueError:
+            decision, delay = ExecutionRetryDecision.TERMINAL, None
+        retry_at = self._now() + delay if delay is not None else None
+        await finalize_execution_failure(
+            session,
+            job_id=job.id,
+            attempt_id=attempt_id,
+            expected_version=job.version,
+            failure_kind=failure.kind.value,
+            failure_message=failure.message,
+            provider=failure.provider,
+            retry_decision=decision.value,
+            retry_at=retry_at,
+            actor=self._worker_id,
+        )
+        return (
+            WorkerResultStatus.RETRY_SCHEDULED
+            if decision == ExecutionRetryDecision.RETRY
+            else WorkerResultStatus.FAILED
+        )
 
     async def _recover_stale_execution(self, session: AsyncSession, job: Job) -> WorkerResult:
         target = JobState.SUCCEEDED if job.result is not None else JobState.FAILED

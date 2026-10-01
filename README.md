@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 5 - Provider execution boundary**
+> **Current status: Phase 6 - Durable execution retry and failure recovery**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -12,7 +12,9 @@ recovery. Phase 5 adds a provider registry, deterministic mock provider,
 normalized provider failures, and worker-enforced execution timeouts. Kafka is
 not required for deterministic unit tests and is not claimed as locally
 verified unless a broker is available. Real external providers, execution
-retry orchestration, Redis, schedulers, frontend, Kubernetes, and production
+Phase 6 adds deterministic bounded execution retry, durable future retry
+dispatch intents, and cancellation-safe failure recovery. Redis, a general
+scheduler, frontend, Kubernetes, external providers, and production
 observability remain deferred.
 
 ## Local backend setup

@@ -11,7 +11,9 @@
 - Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
 - No performance numbers are known at this phase.
 - Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, Redis, external providers, frontend, and deployment infrastructure remain deferred.
-- The retry API action and durable execution retry orchestration remain deferred; the current retry policy covers dispatch publication and worker recovery is terminal rather than provider-call resumption.
+- Phase 6 adds durable execution retry for bounded retryable provider failures;
+  there is still no retry API action, operator replay workflow, or provider-call
+  resumption after a process crash.
 - PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
 - Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Scheduler coordination, execution deduplication, retries, dead letters, and production worker deployment remain deferred.
 - Phase 4B introduced the Kafka adapter; Phase 4C moved publication behind the
@@ -22,10 +24,9 @@
 - Phase 4D/4E provides bounded retry scheduling for dispatch publication. It
   intentionally does not add a DLQ, operator replay API, or scheduler.
 - Phase 4F recovers expired `RUNNING` executions to an explicit terminal
-  outcome; it does not resume an interrupted provider call or claim exactly-once
-  execution. Execution retry orchestration remains deferred until a durable
-  retry-dispatch design is introduced.
+  outcome; Phase 6 retries only the resulting durable failure path and does
+  not resume an interrupted provider call or claim exactly-once execution.
 - Phase 5 implements the provider boundary and deterministic mock provider,
-  but no external provider adapter is included or verified. Provider failures
-  are durably classified and terminal in the current worker flow; execution
-  retry orchestration remains deferred.
+  but no external provider adapter is included or verified. Phase 6 execution
+  retry is locally tested with SQLite and deterministic fakes; PostgreSQL row
+  locking and Kafka broker behavior remain unverified.

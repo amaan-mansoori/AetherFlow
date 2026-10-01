@@ -75,3 +75,12 @@ deterministic mock success, normalized failure categories and output
 validation, worker result and attempt persistence, timeout durability, and
 rejection of provider credentials in job configuration. Provider tests use no
 external credentials or network; they do not verify an external provider.
+
+## Phase 6 execution retry coverage
+
+Phase 6 tests cover deterministic retry classification and capped backoff,
+retryable failure persistence, atomic retry intent creation, second-attempt
+numbering, permanent failure, retry exhaustion, future eligibility,
+cancellation before publication, duplicate retry delivery, and stale-state
+protection. SQLite and local dispatch provide deterministic behavior but do
+not prove PostgreSQL `FOR UPDATE SKIP LOCKED` or Kafka consumer concurrency.

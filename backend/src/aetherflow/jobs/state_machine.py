@@ -30,7 +30,9 @@ VALID_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
             JobState.CANCEL_REQUESTED,
         }
     ),
-    JobState.RETRY_SCHEDULED: frozenset({JobState.QUEUED, JobState.DEAD_LETTERED}),
+    JobState.RETRY_SCHEDULED: frozenset(
+        {JobState.QUEUED, JobState.CANCEL_REQUESTED, JobState.DEAD_LETTERED}
+    ),
     JobState.CANCEL_REQUESTED: frozenset(
         {
             JobState.CANCELLED,

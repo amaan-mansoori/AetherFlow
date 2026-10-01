@@ -10,7 +10,7 @@ from sqlalchemy import or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from aetherflow.infrastructure.database.models import OutboxDispatch, utc_now
+from aetherflow.infrastructure.database.models import Job, JobState, OutboxDispatch, utc_now
 from aetherflow.jobs.dispatch import (
     DispatchFailure,
     DispatchMessage,
@@ -115,6 +115,10 @@ class OutboxPublisher:
                     OutboxDispatch.published_at.is_(None),
                     OutboxDispatch.publication_state == "PENDING",
                     or_(
+                        OutboxDispatch.available_at.is_(None),
+                        OutboxDispatch.available_at <= now,
+                    ),
+                    or_(
                         OutboxDispatch.next_attempt_at.is_(None),
                         OutboxDispatch.next_attempt_at <= now,
                     ),
@@ -122,7 +126,28 @@ class OutboxPublisher:
                         OutboxDispatch.lease_until.is_(None),
                         OutboxDispatch.lease_until < now,
                     ),
+                    or_(
+                        (
+                            OutboxDispatch.available_at.is_(None)
+                            & (
+                                (
+                                    (Job.state == JobState.ACCEPTED)
+                                    & (Job.version == OutboxDispatch.job_version)
+                                )
+                                | (Job.state == JobState.CANCEL_REQUESTED)
+                            )
+                        ),
+                        (
+                            OutboxDispatch.available_at.is_not(None)
+                            & (Job.state.in_({JobState.RETRY_SCHEDULED, JobState.CANCEL_REQUESTED}))
+                            & (
+                                (Job.state == JobState.CANCEL_REQUESTED)
+                                | (Job.version == OutboxDispatch.job_version)
+                            )
+                        ),
+                    ),
                 )
+                .join(Job, Job.id == OutboxDispatch.job_id)
                 .order_by(OutboxDispatch.created_at.asc(), OutboxDispatch.id.asc())
                 .limit(1)
                 .with_for_update(skip_locked=True)

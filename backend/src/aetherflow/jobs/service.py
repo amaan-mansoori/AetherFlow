@@ -1,5 +1,6 @@
 """Job domain application services."""
 
+from datetime import datetime
 from typing import Any, cast
 from uuid import UUID
 
@@ -338,6 +339,97 @@ async def record_job_attempt(
         ) from exc
     await session.refresh(attempt)
     return attempt
+
+
+async def finalize_execution_failure(
+    session: AsyncSession,
+    *,
+    job_id: UUID,
+    attempt_id: UUID,
+    expected_version: int,
+    failure_kind: str,
+    failure_message: str,
+    provider: str | None,
+    retry_decision: str,
+    retry_at: datetime | None,
+    actor: str,
+) -> Job:
+    """Atomically persist failure metadata, lifecycle state, and retry intent."""
+    job = await session.scalar(
+        select(Job)
+        .options(selectinload(Job.attempts), selectinload(Job.result))
+        .where(Job.id == job_id)
+        .with_for_update()
+    )
+    attempt = await session.get(JobAttempt, attempt_id)
+    if job is None or attempt is None:
+        raise ApiError("NOT_FOUND", "Execution record not found.", 404)
+    if job.state != JobState.RUNNING or job.version != expected_version:
+        await session.rollback()
+        raise ApiError("CONFLICT", "The execution became stale before finalization.", 409)
+
+    target = JobState.RETRY_SCHEDULED if retry_at is not None else JobState.FAILED
+    validate_transition(job.state, target)
+    attempt.status = "FAILED"
+    attempt.completed_at = utc_now()
+    attempt.error_class = failure_kind
+    attempt.error_message = failure_message[:4000]
+    attempt.provider = provider
+    attempt.retry_decision = retry_decision
+    now = utc_now()
+    next_version = expected_version + 1
+    result = cast(
+        CursorResult[Any],
+        await session.execute(
+            update(Job)
+            .where(
+                Job.id == job_id,
+                Job.state == JobState.RUNNING,
+                Job.version == expected_version,
+            )
+            .values(
+                state=target,
+                version=next_version,
+                execution_owner=None,
+                execution_dispatch_version=None,
+                execution_lease_until=None,
+                updated_at=now,
+            )
+        ),
+    )
+    if result.rowcount != 1:
+        await session.rollback()
+        raise ApiError("CONFLICT", "The execution became stale before finalization.", 409)
+
+    session.add(
+        JobEvent(
+            job_id=job_id,
+            event_type=f"STATE_CHANGED_TO_{target}",
+            prior_state=JobState.RUNNING,
+            next_state=target,
+            actor=actor,
+            payload={
+                "reason": "execution_failed",
+                "failure_kind": failure_kind,
+                "retry_decision": retry_decision,
+                "retry_at": retry_at.isoformat() if retry_at else None,
+            },
+        )
+    )
+    if retry_at is not None:
+        session.add(
+            OutboxDispatch(
+                job_id=job_id,
+                job_version=next_version,
+                enqueued_at=retry_at,
+                available_at=retry_at,
+                message_type="JOB_DISPATCH",
+                schema_version="v1",
+            )
+        )
+    await session.commit()
+    await session.refresh(job)
+    return job
 
 
 async def record_job_result(

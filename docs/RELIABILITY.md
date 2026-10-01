@@ -116,5 +116,24 @@ enforces the durable job timeout with `asyncio.wait_for`; a timeout records a
 failed attempt with `TIMEOUT`, clears the execution lease, and transitions the
 job through the existing CAS service. Provider failures are classified
 explicitly and are not automatically retried in Phase 5. Dispatch retry
-remains the outbox concern; execution retry requires a future retry-dispatch
-design.
+remains the outbox concern.
+
+## Phase 6 execution retry and failure recovery
+
+Execution retry is distinct from dispatch publication retry. The centralized
+`ExecutionRetryPolicy` retries only `RATE_LIMIT`, `TIMEOUT`, and
+`TRANSIENT_PROVIDER` failures, subject to the persisted per-job maximum
+attempt budget. `VALIDATION`, `AUTHENTICATION`, `PERMANENT_PROVIDER`,
+`CANCELLATION`, `UNEXPECTED`, and legacy `EXECUTION` failures are terminal.
+Backoff is deterministic, capped exponential, and jitter is not applied.
+
+The worker atomically records bounded failure metadata, clears the execution
+lease, transitions `RUNNING -> RETRY_SCHEDULED`, and creates a future-dated
+outbox intent. The outbox publisher is the retry dispatcher: it claims only
+due intents whose job state and version still match. Once published, the
+worker advances `RETRY_SCHEDULED -> QUEUED -> RUNNING`. Cancellation wins over
+scheduled retry; a due cancellation message is consumed only to complete
+`CANCEL_REQUESTED -> CANCELLED`, while stale or duplicate retry messages are
+acknowledged as ineligible. Retry exhaustion transitions to `FAILED`. Publication and
+execution remain at least once, and provider-side work may still occur more
+than once.

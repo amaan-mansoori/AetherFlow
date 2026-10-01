@@ -21,8 +21,14 @@
 4. `ProviderExecutor` resolves a configured provider through the registry; the adapter applies provider error classification and normalized response handling.
 5. The worker enforces the job timeout outside the database transaction.
 6. Pydantic validation accepts or rejects structured output.
-7. A transaction persists result or failure, updates job state, and appends a job event.
-8. Worker publishes a lifecycle message; duplicate lifecycle publication is acceptable because consumers must be idempotent.
+7. For retryable failure, one transaction persists bounded failure metadata,
+   clears the lease, transitions `RUNNING -> RETRY_SCHEDULED`, and creates a
+   future-dated outbox dispatch intent.
+8. The outbox publisher later publishes the eligible retry intent; the worker
+   advances it through `QUEUED -> RUNNING`. Permanent or exhausted failures
+   transition to `FAILED`.
+9. A transaction persists a successful result and lifecycle event. Duplicate
+   lifecycle publication is acceptable because consumers must be idempotent.
 
 ## Read path
 
