@@ -14,3 +14,5 @@
 - The retry API action is deferred until retry execution infrastructure exists; retry policy is persisted as job data only.
 - PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
 - Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Kafka, durable dispatch recovery, scheduler coordination, execution deduplication, retries, dead letters, and production workers remain deferred.
+- Phase 4B adds an opt-in Kafka adapter and API publication path, but PostgreSQL commit and Kafka publication are not atomic. A job can remain accepted when publication fails; durable outbox/recovery is deferred. Kafka broker integration and PostgreSQL concurrency remain unverified in this environment.
+- A worker runtime entrypoint/deployment is not yet provided; `KafkaWorkerRunner` is the explicit integration boundary for a later worker process. The API does not consume Kafka.

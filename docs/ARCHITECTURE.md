@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 4A contracts implemented
+**Status:** Architecture / Specification Phase; Phase 4B Kafka dispatch implemented
 
 ## Decision summary
 
@@ -42,6 +42,41 @@ records the attempt outcome and result, then applies the final CAS-protected
 state transition. Stale dispatch messages are rejected. This is a contract and
 local orchestration foundation, not Kafka delivery or exactly-once execution.
 
+## Phase 4B Kafka dispatch
+
+Kafka is an explicit transport adapter behind `JobDispatcher`, implemented in
+`aetherflow.infrastructure.kafka`. It is enabled only with
+`AETHERFLOW_KAFKA_ENABLED=true`; the API otherwise retains the deterministic
+non-Kafka test/development behavior.
+
+The API creates a producer-only dispatcher. A worker runtime creates a
+producer/consumer dispatcher with `create_worker_dispatcher()` and passes it to
+`KafkaWorkerRunner`, which invokes the existing `Worker`; this keeps Kafka
+consumption out of the FastAPI lifecycle and avoids starting an idle consumer
+in every API replica.
+
+- **Topic:** `AETHERFLOW_KAFKA_TOPIC`, default `aetherflow.jobs`.
+- **Key:** the UTF-8 job UUID, preserving per-job partition affinity.
+- **Payload:** deterministic UTF-8 JSON with schema
+  `aetherflow.job-dispatch.v1`, `schema_version`, `job_id`, `job_version`, and
+  timezone-aware `enqueued_at`.
+- **Consumer group:** `AETHERFLOW_KAFKA_CONSUMER_GROUP`, default
+  `aetherflow-workers`.
+- **Producer:** waits for `send_and_wait` with `acks=all`; idempotent producer
+  mode is configurable and defaults on. A publish exception is surfaced.
+- **Consumer:** disables auto-commit, validates the envelope, and hands only a
+  `DispatchMessage` to `Worker` through `KafkaWorkerRunner`. Malformed or
+  unsupported messages are rejected without acknowledgement.
+- **Acknowledgement:** the worker commits the record offset only after it has
+  made a durable worker decision. A worker crash or offset-commit failure can
+  cause redelivery; stale versions, terminal state, and CAS protect the durable
+  job state.
+
+The API stores a job before publishing its dispatch message. There is no
+distributed transaction between PostgreSQL and Kafka: a database-success/Kafka
+failure window remains observable as an accepted job and returns
+`DISPATCH_UNAVAILABLE`. A durable outbox/recovery mechanism is deferred.
+
 ## Data and consistency
 
 The API transaction creates the job and idempotency record before publishing dispatch. Publication failures leave an observable recoverable state; a scheduler/outbox-compatible design is reserved for implementation design if direct publication cannot provide the required reliability. Job state transitions use compare-and-set predicates and short transactions, with row locks for claim-sensitive operations.
@@ -50,9 +85,18 @@ The API transaction creates the job and idempotency record before publishing dis
 
 The scheduler scans only due `QUEUED` or `RETRY_SCHEDULED` work using indexed timestamps and claims a bounded batch. A deployment lease prevents duplicate scheduling when more than one scheduler runs. Retry delay is persisted with the job/attempt decision; the scheduler, not a busy worker loop, makes due work eligible. Exponential backoff has a configured cap and randomized jitter. A retry budget and maximum attempts prevent retry storms; poison messages are isolated and dead-lettered.
 
-## Kafka contract
+## Future Kafka event contract
 
-Messages are JSON or another explicitly versioned serialization with a schema version, message ID, job ID, event time, principal ID where needed, attempt metadata, and trace headers. `jobs.submit` is partitioned by job ID to preserve per-job ordering; partition count is configuration, not a capacity promise. Workers share a stable consumer group per environment and process each message at least once. Retention is longer than the expected operational replay window and is environment-configured. Consumer offsets are committed after the durable decision. Broker errors cause backpressure/retry and are never reported as successful dispatch. Lifecycle consumers must tolerate duplicates and out-of-order events; PostgreSQL remains authoritative.
+Future lifecycle/event topics may use JSON or another explicitly versioned
+serialization with a schema version, message ID, job ID, event time, principal
+ID where needed, attempt metadata, and trace headers. The Phase 4B job dispatch
+topic is `aetherflow.jobs` and is partitioned by job ID to preserve per-job
+ordering; partition count is configuration, not a capacity promise. Workers
+share a stable consumer group per environment and process each message at
+least once. Retention is longer than the expected operational replay window and
+is environment-configured. Broker errors cause backpressure/retry and are
+never reported as successful dispatch. Lifecycle consumers must tolerate
+duplicates and out-of-order events; PostgreSQL remains authoritative.
 
 ## Redis contract
 

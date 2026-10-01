@@ -53,3 +53,19 @@ future at-least-once message delivery and from execution deduplication. Phase
 4A does not claim exactly-once processing, retries, backoff, dead-lettering, or
 provider-side cancellation. Those require later broker, scheduler, and provider
 work.
+
+## Phase 4B Kafka acknowledgement model
+
+Kafka dispatch uses the `aetherflow.jobs` topic, job UUID keys, the
+`aetherflow.job-dispatch.v1` envelope, and the `aetherflow-workers` consumer
+group by default. Auto-commit is disabled. The consumer validates a message,
+the `KafkaWorkerRunner` invokes the existing worker, and only then is the
+offset committed. A malformed or unsupported message is surfaced as a dispatch
+failure and is not acknowledged. A worker crash before commit can redeliver the
+message. The API owns a producer-only dispatcher; consumption belongs to an
+independent worker runtime.
+
+The producer waits for Kafka acknowledgement with `acks=all` and producer
+idempotence enabled by default. This is producer delivery behavior, not an
+exactly-once execution guarantee. The API database commit and Kafka publish are
+separate operations; an outbox or recovery workflow is future work.

@@ -60,4 +60,16 @@ This matrix is intentionally a phase-0 contract. Test file names and concrete co
 | Worker lifecycle | `jobs/worker.py`, existing job services | none | existing jobs, attempts, results, events | success/failure/cancellation/stale-message tests | ARCHITECTURE, RELIABILITY |
 | Dispatch boundary | `jobs/dispatch.py` | future broker boundary | none | local round-trip/dispatch failure tests | ARCHITECTURE, KNOWN-LIMITATIONS |
 
-Worker execution, retry execution, Kafka, Redis, provider integration, admin operations, frontend, and deployment remain future-phase requirements.
+Retry execution, Redis, provider integration, admin operations, frontend, and
+deployment remain future-phase requirements.
+
+## Phase 4B implementation mapping
+
+| Requirement | Component | API | Database | Test | Documentation |
+|---|---|---|---|---|---|
+| Kafka envelope and producer | `infrastructure/kafka.py`, settings | job submission when Kafka is enabled | existing jobs | `test_kafka.py` serialization/key/failure tests | ARCHITECTURE, RELIABILITY |
+| Kafka consumer and acknowledgement | `infrastructure/kafka.py`, `jobs/worker.py` | none | existing jobs/events | receive/ack and Phase 4A worker tests | ARCHITECTURE, TESTING |
+| Duplicate delivery safety | existing worker CAS/state rules | none | jobs version/state | duplicate/stale/terminal tests | RELIABILITY, KNOWN-LIMITATIONS |
+
+Redis, provider integration, admin operations, frontend, and deployment remain
+future-phase requirements.

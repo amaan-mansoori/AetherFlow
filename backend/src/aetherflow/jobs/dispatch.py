@@ -18,6 +18,7 @@ class DispatchMessage:
     job_id: UUID
     job_version: int
     enqueued_at: datetime
+    schema_version: str = "v1"
 
 
 class JobDispatcher(Protocol):
@@ -28,6 +29,12 @@ class JobDispatcher(Protocol):
 
     async def receive(self) -> DispatchMessage:
         """Receive the next message."""
+
+    async def acknowledge(self, message: DispatchMessage) -> None:
+        """Commit the transport offset after a durable processing decision."""
+
+    async def close(self) -> None:
+        """Release transport resources during graceful shutdown."""
 
 
 class LocalDispatcher:
@@ -41,3 +48,9 @@ class LocalDispatcher:
 
     async def receive(self) -> DispatchMessage:
         return await self._messages.get()
+
+    async def acknowledge(self, message: DispatchMessage) -> None:
+        """Local messages have no external offset to commit."""
+
+    async def close(self) -> None:
+        """Local dispatch has no resources to release."""

@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     refresh_cookie_domain: str | None = None
     logging_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=list)
+    kafka_enabled: bool = False
+    kafka_bootstrap_servers: str = "localhost:9092"
+    kafka_topic: str = "aetherflow.jobs"
+    kafka_consumer_group: str = "aetherflow-workers"
+    kafka_client_id: str = "aetherflow"
+    kafka_auto_offset_reset: Literal["earliest", "latest"] = "earliest"
+    kafka_producer_enable_idempotence: bool = True
 
     @field_validator("logging_level")
     @classmethod

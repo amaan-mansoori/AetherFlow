@@ -22,7 +22,10 @@ from aetherflow.jobs.worker import Worker, WorkerResultStatus
 
 @dataclass
 class SuccessfulExecutor:
+    calls: int = 0
+
     async def execute(self, request: ExecutionRequest) -> ExecutionOutcome:
+        self.calls += 1
         return ExecutionOutcome(output={"job_id": str(request.job_id), "ok": True})
 
 
@@ -35,11 +38,28 @@ class FailingExecutor:
 
 
 class RaisingDispatcher:
+    acknowledgements: int = 0
+
     async def dispatch(self, message: DispatchMessage) -> None:
         raise DispatchFailure("dispatcher unavailable")
 
     async def receive(self) -> DispatchMessage:
         raise DispatchFailure("dispatcher unavailable")
+
+    async def acknowledge(self, message: DispatchMessage) -> None:
+        self.acknowledgements += 1
+
+    async def close(self) -> None:
+        return None
+
+
+class TrackingDispatcher(LocalDispatcher):
+    def __init__(self) -> None:
+        super().__init__()
+        self.acknowledgements = 0
+
+    async def acknowledge(self, message: DispatchMessage) -> None:
+        self.acknowledgements += 1
 
 
 def message_for(job: Job) -> DispatchMessage:
@@ -91,9 +111,7 @@ async def test_worker_success_records_attempt_result_and_transitions(app) -> Non
 
     assert result.status == WorkerResultStatus.SUCCEEDED
     async with app.state.session_factory() as session:
-        stored = await session.scalar(
-            select(Job).options().where(Job.id == job.id)
-        )
+        stored = await session.scalar(select(Job).options().where(Job.id == job.id))
         assert stored is not None
         assert stored.state == JobState.SUCCEEDED
         attempt = await session.scalar(select(JobAttempt).where(JobAttempt.job_id == job.id))
@@ -143,6 +161,23 @@ async def test_worker_unexpected_exception_becomes_failed_execution(app) -> None
 
 
 @pytest.mark.asyncio
+async def test_worker_exception_does_not_acknowledge_message(app) -> None:
+    job, _ = await create_job(app, "phase4a-no-ack@example.com")
+    dispatcher = TrackingDispatcher()
+    await dispatcher.dispatch(message_for(job))
+
+    class BrokenWorkerExecutor:
+        async def execute(self, request: ExecutionRequest) -> ExecutionOutcome:
+            raise KeyboardInterrupt
+
+    worker = Worker(app.state.session_factory, dispatcher, BrokenWorkerExecutor())
+    with pytest.raises(KeyboardInterrupt):
+        await worker.run_once()
+
+    assert dispatcher.acknowledgements == 0
+
+
+@pytest.mark.asyncio
 async def test_worker_cancels_job_before_execution_without_attempt(app) -> None:
     job, user = await create_job(app, "phase4a-cancel@example.com")
     async with app.state.session_factory() as session:
@@ -165,9 +200,7 @@ async def test_worker_cancels_job_before_execution_without_attempt(app) -> None:
 async def test_worker_rejects_stale_dispatch_version(app) -> None:
     job, _ = await create_job(app, "phase4a-stale@example.com")
     dispatcher = LocalDispatcher()
-    await dispatcher.dispatch(
-        DispatchMessage(job.id, job.version - 1, datetime.now(UTC))
-    )
+    await dispatcher.dispatch(DispatchMessage(job.id, job.version - 1, datetime.now(UTC)))
     worker = Worker(app.state.session_factory, dispatcher, SuccessfulExecutor())
 
     result = await worker.run_once()
@@ -187,3 +220,20 @@ async def test_worker_rejects_terminal_job_as_ineligible(app) -> None:
     result = await worker.run_once()
 
     assert result.status == WorkerResultStatus.INELIGIBLE
+
+
+@pytest.mark.asyncio
+async def test_duplicate_dispatch_does_not_execute_terminal_job_again(app) -> None:
+    job, _ = await create_job(app, "phase4a-duplicate@example.com")
+    dispatcher = LocalDispatcher()
+    executor = SuccessfulExecutor()
+    message = message_for(job)
+    await dispatcher.dispatch(message)
+    worker = Worker(app.state.session_factory, dispatcher, executor)
+    assert (await worker.run_once()).status == WorkerResultStatus.SUCCEEDED
+
+    await dispatcher.dispatch(message)
+    result = await worker.run_once()
+
+    assert result.status == WorkerResultStatus.INELIGIBLE
+    assert executor.calls == 1

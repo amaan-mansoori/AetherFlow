@@ -178,8 +178,10 @@ async def cancel_job(
     request_id: str | None = None,
 ) -> Job:
     """Request job cancellation via the authoritative state machine."""
-    query = select(Job).options(selectinload(Job.result), selectinload(Job.attempts)).where(
-        Job.id == job_id
+    query = (
+        select(Job)
+        .options(selectinload(Job.result), selectinload(Job.attempts))
+        .where(Job.id == job_id)
     )
     if not await is_admin_user(session, user):
         query = query.where(Job.user_id == user.id)

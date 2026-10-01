@@ -60,7 +60,9 @@ class Worker:
     async def run_once(self) -> WorkerResult:
         message = await self._dispatcher.receive()
         async with self._session_factory() as session:
-            return await self.process_message(session, message)
+            result = await self.process_message(session, message)
+        await self._dispatcher.acknowledge(message)
+        return result
 
     async def process_message(
         self, session: AsyncSession, message: DispatchMessage
@@ -207,9 +209,7 @@ class Worker:
             attempt.error_message = failure.message
         await session.commit()
 
-    async def _fail_job(
-        self, session: AsyncSession, job: Job, failure: ExecutionFailure
-    ) -> None:
+    async def _fail_job(self, session: AsyncSession, job: Job, failure: ExecutionFailure) -> None:
         current = await self._load_job(session, job.id)
         if current is None:
             raise ApiError("NOT_FOUND", "Job not found.", 404)
@@ -223,9 +223,7 @@ class Worker:
             expected_version=current.version,
         )
 
-    async def _cancel_after_execution_failure(
-        self, session: AsyncSession, job: Job
-    ) -> None:
+    async def _cancel_after_execution_failure(self, session: AsyncSession, job: Job) -> None:
         current = await self._load_job(session, job.id)
         if current is None:
             raise ApiError("NOT_FOUND", "Job not found.", 404)

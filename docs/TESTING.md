@@ -37,3 +37,16 @@ and unexpected execution failures, cancellation before execution, attempt/result
 persistence, terminal/ineligible dispatches, and stale-version rejection. These
 tests are deterministic and do not require Kafka or Redis. They do not prove
 PostgreSQL locking, durable broker delivery, or exactly-once execution.
+
+## Phase 4B Kafka transport coverage
+
+`backend/tests/test_kafka.py` uses fake producer and consumer clients to verify
+deterministic envelope serialization, schema/version and field validation,
+job-ID message keys, producer failure propagation, valid receive, explicit
+offset acknowledgement, and malformed-message non-acknowledgement. No test
+requires a Kafka broker. The suite therefore validates adapter behavior but not
+broker connectivity, partition rebalancing, or production delivery.
+
+The application lifecycle intentionally creates only a producer when Kafka is
+enabled. A worker runtime must create the consumer dispatcher and
+`KafkaWorkerRunner`; no Kafka consumer is started in each API replica.
