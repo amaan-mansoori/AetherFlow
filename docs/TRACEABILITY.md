@@ -67,9 +67,20 @@ deployment remain future-phase requirements.
 
 | Requirement | Component | API | Database | Test | Documentation |
 |---|---|---|---|---|---|
-| Kafka envelope and producer | `infrastructure/kafka.py`, settings | job submission when Kafka is enabled | existing jobs | `test_kafka.py` serialization/key/failure tests | ARCHITECTURE, RELIABILITY |
+| Kafka envelope and producer | `infrastructure/kafka.py`, settings | outbox publisher runtime | existing jobs/outbox | `test_kafka.py` serialization/key/failure tests | ARCHITECTURE, RELIABILITY |
 | Kafka consumer and acknowledgement | `infrastructure/kafka.py`, `jobs/worker.py` | none | existing jobs/events | receive/ack and Phase 4A worker tests | ARCHITECTURE, TESTING |
 | Duplicate delivery safety | existing worker CAS/state rules | none | jobs version/state | duplicate/stale/terminal tests | RELIABILITY, KNOWN-LIMITATIONS |
 
 Redis, provider integration, admin operations, frontend, and deployment remain
 future-phase requirements.
+
+## Phase 4C implementation mapping
+
+| Requirement | Component | API | Database | Test | Documentation |
+|---|---|---|---|---|---|
+| Atomic dispatch intent | `jobs/service.py` | `POST /api/v1/jobs` | `outbox_dispatches` | `test_outbox.py` atomicity/replay tests | ARCHITECTURE, DATABASE |
+| Outbox publication/recovery | `jobs/outbox.py`, Kafka dispatcher | internal runtime only | outbox publication metadata | publication success/failure/recovery tests | RELIABILITY, TESTING |
+| Duplicate publication safety | existing Worker/CAS | none | jobs and outbox | duplicate dispatch tests | RELIABILITY, KNOWN-LIMITATIONS |
+
+Redis, scheduler, execution retries, providers, admin operations, frontend,
+and deployment remain future-phase requirements.

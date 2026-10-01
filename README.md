@@ -2,9 +2,9 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 4B - Kafka-backed asynchronous dispatch foundation**
+> **Current status: Phase 4C - Transactional outbox dispatch foundation**
 
-Phase 4B adds an opt-in Kafka dispatch adapter and consumer acknowledgement boundary while preserving the durable job domain and Phase 4A worker contracts. Kafka is not required for deterministic unit tests and is not claimed as locally verified unless a broker is available. Redis, AI providers, retries, schedulers, frontend, Kubernetes, and production observability remain deferred.
+Phase 4C transactionally records each job's Kafka dispatch intent with durable job creation, then lets an independent outbox publisher recover Kafka publication failures. Kafka is not required for deterministic unit tests and is not claimed as locally verified unless a broker is available. Redis, AI providers, retries, schedulers, frontend, Kubernetes, and production observability remain deferred.
 
 ## Local backend setup
 

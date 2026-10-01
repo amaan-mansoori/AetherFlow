@@ -67,5 +67,19 @@ independent worker runtime.
 
 The producer waits for Kafka acknowledgement with `acks=all` and producer
 idempotence enabled by default. This is producer delivery behavior, not an
-exactly-once execution guarantee. The API database commit and Kafka publish are
-separate operations; an outbox or recovery workflow is future work.
+exactly-once execution guarantee. The API database commit records the outbox
+intent before Kafka is attempted; Kafka publication remains a separate
+operation with no distributed transaction.
+
+## Phase 4C transactional outbox
+
+Job insertion, idempotency persistence, lifecycle acceptance, and the
+`outbox_dispatches` dispatch intent commit atomically. The API does not publish
+Kafka and does not hold its database transaction open while waiting for Kafka.
+
+An independent publisher leases unpublished records, publishes outside a
+database transaction, and marks the record published only after Kafka confirms
+publication. Failures clear the lease and retain attempt/error metadata for
+recovery. A publisher crash after Kafka publication and before the marker
+commit can cause duplicate publication; this is at-least-once dispatch, not
+exactly-once delivery or execution.

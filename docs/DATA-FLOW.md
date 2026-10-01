@@ -6,9 +6,12 @@
 
 1. Client sends an authenticated request and idempotency key.
 2. API authenticates, authorizes, validates schema, normalizes the payload, and computes a request fingerprint.
-3. A transaction inserts or resolves the idempotency record and creates `ACCEPTED` job state.
-4. API publishes a versioned `jobs.submit` message containing job ID, tenant/principal ID, attempt policy, and trace context.
-5. Job becomes `QUEUED`; publication failures are recorded and surfaced for recovery.
+3. One database transaction inserts or resolves the idempotency record, creates
+   `ACCEPTED` job state, and records an immutable outbox dispatch intent.
+4. An independent outbox publisher reconstructs the versioned dispatch message
+   and publishes it to Kafka after the transaction commits.
+5. Publication failures remain recoverable in the outbox; the worker owns later
+   execution-state transitions.
 
 ## Execution
 
@@ -27,4 +30,3 @@ The console polls versioned API endpoints. API reads PostgreSQL for durable stat
 ## Trace propagation
 
 Request ID and correlation ID enter at HTTP, are stored in job/attempt metadata where appropriate, and are propagated in Kafka headers. The conceptual span chain is HTTP -> persistence -> publish -> consume -> inference -> persistence.
-

@@ -25,6 +25,6 @@ improve publication behavior but do not provide exactly-once execution.
 ## Consequences
 
 PostgreSQL and Kafka remain separate systems with no distributed transaction.
-The API can return dispatch-unavailable after a durable job commit, leaving an
-accepted job requiring future recovery. An outbox or recovery mechanism is
-deferred until its operational requirements are defined.
+ADR-0012 supersedes the API publication path: the API records an outbox intent
+atomically with the job, and an independent publisher sends the Kafka envelope.
+The API no longer returns dispatch-unavailable merely because Kafka is down.

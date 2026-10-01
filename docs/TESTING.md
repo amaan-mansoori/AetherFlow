@@ -50,3 +50,12 @@ broker connectivity, partition rebalancing, or production delivery.
 The application lifecycle intentionally creates only a producer when Kafka is
 enabled. A worker runtime must create the consumer dispatcher and
 `KafkaWorkerRunner`; no Kafka consumer is started in each API replica.
+
+## Phase 4C transactional outbox coverage
+
+`backend/tests/test_outbox.py` verifies the atomic job/outbox submission
+invariant, rollback behavior, idempotent replay, immutable dispatch fields,
+successful publication/finalization, publication failure recovery metadata,
+published-record skipping, and bounded multi-record publication. These tests
+use SQLite for deterministic portable behavior and do not prove PostgreSQL
+`SKIP LOCKED` concurrency.

@@ -73,7 +73,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(512))
     status: Mapped[UserStatus] = mapped_column(String(32), default=UserStatus.ACTIVE)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, index=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
@@ -142,9 +144,7 @@ class AuditLog(Base):
     success: Mapped[bool] = mapped_column(Boolean)
     source: Mapped[str | None] = mapped_column(String(255))
     context: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utc_now, index=True
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
 
 Index("ix_refresh_sessions_active_expiry", RefreshSession.revoked_at, RefreshSession.expires_at)
@@ -260,8 +260,34 @@ class JobEvent(Base):
     job: Mapped[Job] = relationship(back_populates="events")
 
 
+class OutboxDispatch(Base):
+    """Immutable dispatch intent and mutable publication metadata."""
+
+    __tablename__ = "outbox_dispatches"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    message_type: Mapped[str] = mapped_column(String(64), default="JOB_DISPATCH")
+    schema_version: Mapped[str] = mapped_column(String(32), default="v1")
+    job_id: Mapped[UUID] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), unique=True)
+    job_version: Mapped[int] = mapped_column(Integer)
+    enqueued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    lease_owner: Mapped[str | None] = mapped_column(String(128))
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+    job: Mapped[Job] = relationship()
+
+
 Index("ix_jobs_user_created", Job.user_id, Job.created_at.desc())
 Index("ix_jobs_state_created", Job.state, Job.created_at)
+Index(
+    "ix_outbox_unpublished_created",
+    OutboxDispatch.published_at,
+    OutboxDispatch.created_at,
+)
 Index(
     "uq_idempotency_principal_key",
     IdempotencyRecord.principal_id,

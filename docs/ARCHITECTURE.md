@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 4B Kafka dispatch implemented
+**Status:** Architecture / Specification Phase; Phase 4C transactional outbox implemented
 
 ## Decision summary
 
@@ -47,13 +47,14 @@ local orchestration foundation, not Kafka delivery or exactly-once execution.
 Kafka is an explicit transport adapter behind `JobDispatcher`, implemented in
 `aetherflow.infrastructure.kafka`. It is enabled only with
 `AETHERFLOW_KAFKA_ENABLED=true`; the API otherwise retains the deterministic
-non-Kafka test/development behavior.
+database-only submission behavior. Kafka publication is performed by the
+independent outbox publisher, not by the API request handler.
 
-The API creates a producer-only dispatcher. A worker runtime creates a
-producer/consumer dispatcher with `create_worker_dispatcher()` and passes it to
-`KafkaWorkerRunner`, which invokes the existing `Worker`; this keeps Kafka
-consumption out of the FastAPI lifecycle and avoids starting an idle consumer
-in every API replica.
+The outbox publisher creates or receives a producer-capable dispatcher. A
+worker runtime creates a producer/consumer dispatcher with
+`create_worker_dispatcher()` and passes it to `KafkaWorkerRunner`, which invokes
+the existing `Worker`; this keeps Kafka consumption out of the FastAPI
+lifecycle and avoids starting an idle consumer in every API replica.
 
 - **Topic:** `AETHERFLOW_KAFKA_TOPIC`, default `aetherflow.jobs`.
 - **Key:** the UTF-8 job UUID, preserving per-job partition affinity.
@@ -72,14 +73,34 @@ in every API replica.
   cause redelivery; stale versions, terminal state, and CAS protect the durable
   job state.
 
-The API stores a job before publishing its dispatch message. There is no
-distributed transaction between PostgreSQL and Kafka: a database-success/Kafka
-failure window remains observable as an accepted job and returns
-`DISPATCH_UNAVAILABLE`. A durable outbox/recovery mechanism is deferred.
+The API stores the job and immutable dispatch intent in one PostgreSQL
+transaction. `OutboxPublisher` claims an unpublished row with a short lease,
+publishes outside the database transaction, and marks it published in a
+separate short transaction. Kafka publication failure leaves the row
+recoverable; PostgreSQL and Kafka are not a distributed transaction.
+
+## Phase 4C transactional outbox
+
+`outbox_dispatches` contains one immutable dispatch intent per job, including
+job ID, submission-time job version, schema version, enqueue timestamp, and
+publication metadata. The unique job ID constraint prevents idempotent replay
+from creating a second intent. The `(published_at, created_at)` index supports
+oldest-unpublished scans.
+
+`OutboxPublisher` uses `SELECT ... FOR UPDATE SKIP LOCKED` where supported,
+commits a lease before Kafka I/O, then publishes and finalizes the row in a
+new transaction. Lease expiry makes a crashed claim recoverable. A crash after
+Kafka success but before finalization may publish a duplicate; existing worker
+version/state/CAS protections remain authoritative. SQLite tests validate
+portable publication behavior only; PostgreSQL locking semantics remain
+unverified.
 
 ## Data and consistency
 
-The API transaction creates the job and idempotency record before publishing dispatch. Publication failures leave an observable recoverable state; a scheduler/outbox-compatible design is reserved for implementation design if direct publication cannot provide the required reliability. Job state transitions use compare-and-set predicates and short transactions, with row locks for claim-sensitive operations.
+The API transaction creates the job, idempotency record, and outbox intent
+before publication. Publication failures leave an observable recoverable state.
+Job state transitions use compare-and-set predicates and short transactions,
+with row locks for claim-sensitive operations.
 
 ## Scheduler and retry design
 

@@ -17,6 +17,7 @@ from aetherflow.infrastructure.database.models import (
     JobEvent,
     JobResult,
     JobState,
+    OutboxDispatch,
     User,
     utc_now,
 )
@@ -69,7 +70,7 @@ async def submit_job(
             raise ApiError("NOT_FOUND", "Job not found.", 404)
         return existing_job, False
 
-    # Insert path: create Job and IdempotencyRecord atomically
+    # Insert path: create Job, IdempotencyRecord, and dispatch intent atomically
     job = Job(
         user_id=user.id,
         type=payload.type,
@@ -104,6 +105,15 @@ async def submit_job(
         response_status=201,
     )
     session.add(record)
+    session.add(
+        OutboxDispatch(
+            job_id=job.id,
+            job_version=job.version,
+            enqueued_at=job.created_at,
+            message_type="JOB_DISPATCH",
+            schema_version="v1",
+        )
+    )
 
     try:
         await session.commit()

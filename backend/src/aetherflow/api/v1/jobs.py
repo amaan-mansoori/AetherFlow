@@ -3,14 +3,12 @@
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aetherflow.api.dependencies import get_request_db_session
-from aetherflow.api.errors import ApiError
 from aetherflow.auth.policies import require_authenticated_user
 from aetherflow.infrastructure.database.models import Job, JobState, User
-from aetherflow.jobs.dispatch import DispatchFailure, DispatchMessage
 from aetherflow.jobs.idempotency import validate_idempotency_key
 from aetherflow.jobs.schemas import (
     JobAttemptResponse,
@@ -74,7 +72,6 @@ def _to_job_summary(job: Job) -> dict[str, Any]:
 @router.post("", response_model=JobDetailResponse, status_code=status.HTTP_201_CREATED)
 async def create_job(
     payload: JobCreateRequest,
-    request: Request,
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
     user: User = authenticated_user,
@@ -90,22 +87,6 @@ async def create_job(
     )
     if not is_new:
         response.status_code = status.HTTP_200_OK
-    dispatcher = request.app.state.dispatcher
-    if dispatcher is not None:
-        try:
-            await dispatcher.dispatch(
-                DispatchMessage(
-                    job_id=job.id,
-                    job_version=job.version,
-                    enqueued_at=job.created_at,
-                )
-            )
-        except DispatchFailure as exc:
-            raise ApiError(
-                "DISPATCH_UNAVAILABLE",
-                "The job was stored but dispatch is temporarily unavailable.",
-                503,
-            ) from exc
     return _to_job_detail(job)
 
 

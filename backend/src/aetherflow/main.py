@@ -20,8 +20,6 @@ from aetherflow.api.router import router
 from aetherflow.config.logging import configure_logging
 from aetherflow.config.settings import Settings, get_settings
 from aetherflow.infrastructure.database.session import create_engine, create_session_factory
-from aetherflow.infrastructure.kafka import KafkaDispatcher
-from aetherflow.jobs.dispatch import JobDispatcher
 from aetherflow.observability.request_id import RequestIdMiddleware
 
 logger = logging.getLogger(__name__)
@@ -40,16 +38,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.settings = resolved_settings
         app.state.engine = engine
         app.state.session_factory = session_factory
-        dispatcher: JobDispatcher | None = None
-        if resolved_settings.kafka_enabled:
-            dispatcher = await KafkaDispatcher.create(resolved_settings)
-        app.state.dispatcher = dispatcher
         logger.info("application_started")
         try:
             yield
         finally:
-            if dispatcher is not None:
-                await dispatcher.close()
             await engine.dispose()
             logger.info("application_stopped")
 
