@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 4D/4E/4F reliability foundation implemented
+**Status:** Architecture / Specification Phase; Phase 5 provider execution boundary implemented
 
 ## Decision summary
 
@@ -113,6 +113,31 @@ that receives a message for an expired execution lease deterministically
 recovers the job to `FAILED`, or to `SUCCEEDED` when a durable result already
 exists. Active leases are not stolen. This is crash recovery, not exactly-once
 execution.
+
+## Phase 5 provider execution boundary
+
+Phase 5 keeps the worker provider-independent while making the execution
+boundary operational:
+
+```text
+Worker -> JobExecutor -> ProviderExecutor -> ProviderRegistry -> ProviderAdapter
+```
+
+`ProviderExecutor` selects a provider from the non-secret job configuration,
+falling back to the environment-configured `provider_default`. The registry
+validates provider and model support, and adapters return the existing
+`ExecutionOutcome` contract, which the boundary validates before persistence.
+The deterministic `MockProviderAdapter` is the
+local/CI implementation; it does not represent external model quality or
+provider availability. No adapter receives database sessions or changes job
+state.
+
+The worker wraps execution in the job timeout and maps timeout to a durable
+`TIMEOUT` attempt failure. Provider failures are normalized into validation,
+authentication, rate-limit, timeout, transient-provider, permanent-provider,
+cancellation, and unexpected categories. Provider execution remains outside
+database transactions. Execution retry orchestration and external provider
+transport remain separate future decisions.
 
 ## Data and consistency
 

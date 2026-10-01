@@ -107,3 +107,14 @@ in which case it completes the job as `SUCCEEDED`. A different stale message
 cannot trigger recovery for a newer execution. This closes the
 committed-running crash window without an in-memory deduplication mechanism.
 Cancellation races continue to use the existing state machine and CAS rules.
+
+## Phase 5 provider execution
+
+Provider selection and provider-specific behavior are isolated behind
+`ProviderExecutor`, `ProviderRegistry`, and `ProviderAdapter`. The worker
+enforces the durable job timeout with `asyncio.wait_for`; a timeout records a
+failed attempt with `TIMEOUT`, clears the execution lease, and transitions the
+job through the existing CAS service. Provider failures are classified
+explicitly and are not automatically retried in Phase 5. Dispatch retry
+remains the outbox concern; execution retry requires a future retry-dispatch
+design.

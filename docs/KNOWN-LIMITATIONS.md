@@ -10,7 +10,7 @@
 - The mock provider is deterministic and must not be represented as model-quality evidence.
 - Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
 - No performance numbers are known at this phase.
-- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, and worker crash recovery; schedulers, Redis, provider adapters, frontend, and deployment infrastructure remain deferred.
+- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, Redis, external providers, frontend, and deployment infrastructure remain deferred.
 - The retry API action and durable execution retry orchestration remain deferred; the current retry policy covers dispatch publication and worker recovery is terminal rather than provider-call resumption.
 - PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
 - Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Scheduler coordination, execution deduplication, retries, dead letters, and production worker deployment remain deferred.
@@ -25,3 +25,7 @@
   outcome; it does not resume an interrupted provider call or claim exactly-once
   execution. Execution retry orchestration remains deferred until a durable
   retry-dispatch design is introduced.
+- Phase 5 implements the provider boundary and deterministic mock provider,
+  but no external provider adapter is included or verified. Provider failures
+  are durably classified and terminal in the current worker flow; execution
+  retry orchestration remains deferred.

@@ -1,5 +1,6 @@
-"""Single-message worker orchestration for Phase 4A."""
+"""Single-message worker orchestration with provider execution isolation."""
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -15,6 +16,7 @@ from aetherflow.jobs.dispatch import DispatchMessage, JobDispatcher
 from aetherflow.jobs.execution import (
     ExecutionFailure,
     ExecutionFailureKind,
+    ExecutionOutcome,
     ExecutionRequest,
     JobExecutor,
 )
@@ -151,7 +153,24 @@ class Worker:
         )
 
         try:
-            outcome = await self._executor.execute(request)
+            outcome = await asyncio.wait_for(
+                self._executor.execute(request),
+                timeout=request.timeout_seconds,
+            )
+        except TimeoutError:
+            timeout_failure = ExecutionFailure(
+                ExecutionFailureKind.TIMEOUT,
+                "Execution exceeded the configured timeout.",
+            )
+            await self._finish_attempt(session, attempt.id, "FAILED", timeout_failure)
+            await self._clear_execution_lease(session, job.id)
+            await self._fail_job(session, job, timeout_failure)
+            return WorkerResult(
+                message.job_id,
+                WorkerResultStatus.FAILED,
+                attempt_number,
+                timeout_failure.kind,
+            )
         except ExecutionFailure as failure:
             await self._finish_attempt(session, attempt.id, "FAILED", failure)
             if failure.kind == ExecutionFailureKind.CANCELLATION:
@@ -183,7 +202,7 @@ class Worker:
                 unexpected_failure.kind,
             )
 
-        await self._finish_attempt(session, attempt.id, "SUCCEEDED", None)
+        await self._finish_attempt(session, attempt.id, "SUCCEEDED", None, outcome=outcome)
         await record_job_result(
             session,
             job.id,
@@ -252,6 +271,8 @@ class Worker:
         attempt_id: UUID,
         status: str,
         failure: ExecutionFailure | None,
+        *,
+        outcome: ExecutionOutcome | None = None,
     ) -> None:
         attempt = await session.get(JobAttempt, attempt_id)
         if attempt is None:
@@ -260,7 +281,11 @@ class Worker:
         attempt.completed_at = utc_now()
         if failure is not None:
             attempt.error_class = failure.kind.value
-            attempt.error_message = failure.message
+            attempt.error_message = failure.message[:4000]
+            attempt.provider = failure.provider
+        if outcome is not None:
+            attempt.provider = outcome.provider
+            attempt.usage = outcome.usage
         await session.commit()
 
     async def _fail_job(self, session: AsyncSession, job: Job, failure: ExecutionFailure) -> None:

@@ -67,3 +67,11 @@ closure, retry attempt scheduling and terminal cutoff, deterministic backoff,
 permanent malformed records, lease recovery, and worker recovery of expired
 execution leases. Tests use injected time where retry timing matters. They do
 not claim SQLite proves PostgreSQL locking or Kafka broker behavior.
+
+## Phase 5 provider coverage
+
+Provider tests cover registry resolution, unsupported providers/models,
+deterministic mock success, normalized failure categories and output
+validation, worker result and attempt persistence, timeout durability, and
+rejection of provider credentials in job configuration. Provider tests use no
+external credentials or network; they do not verify an external provider.

@@ -82,8 +82,8 @@ future-phase requirements.
 | Outbox publication/recovery | `jobs/outbox.py`, Kafka dispatcher | internal runtime only | outbox publication metadata | publication success/failure/recovery tests | RELIABILITY, TESTING |
 | Duplicate publication safety | existing Worker/CAS | none | jobs and outbox | duplicate dispatch tests | RELIABILITY, KNOWN-LIMITATIONS |
 
-Redis, scheduler, execution retries, providers, admin operations, frontend,
-and deployment remain future-phase requirements.
+Redis, scheduler, execution retries, external providers, admin operations,
+frontend, and deployment remain future-phase requirements.
 
 ## Phase 4D/4E/4F implementation mapping
 
@@ -95,3 +95,16 @@ and deployment remain future-phase requirements.
 
 PostgreSQL concurrency and Kafka runtime integration remain environment-gated
 verification rather than claims made by SQLite/fake-client tests.
+
+## Phase 5 implementation mapping
+
+| Requirement | Component | Database | Test | Documentation |
+|---|---|---|---|---|
+| Provider boundary and registry | `jobs/providers.py`, `jobs/execution.py` | existing job configuration | `test_phase5_providers.py` registry tests | ARCHITECTURE, API |
+| Deterministic local provider | `MockProviderAdapter` | existing results/attempts | mock success/failure tests | ADR-0008, TESTING |
+| Provider failure/output normalization | `ExecutionFailureKind`, `ProviderExecutor` | existing attempt error/provider fields | category, malformed-output, and worker persistence tests | RELIABILITY, DATABASE |
+| Execution timeout | `jobs/worker.py` | existing attempt/state/lease fields | timeout durability test | RELIABILITY, DATA-FLOW |
+| Provider credential protection | `JobCreateRequest`, runtime settings | no credential columns | schema rejection test | SECURITY, API |
+
+External provider transport and execution retry orchestration remain deferred;
+real PostgreSQL, Kafka, and external-provider verification are environment-gated.

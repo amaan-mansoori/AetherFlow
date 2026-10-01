@@ -11,7 +11,12 @@ class ExecutionFailureKind(StrEnum):
     """Classify failures without coupling the domain to a provider."""
 
     VALIDATION = "VALIDATION"
+    AUTHENTICATION = "AUTHENTICATION"
+    RATE_LIMIT = "RATE_LIMIT"
+    TIMEOUT = "TIMEOUT"
     EXECUTION = "EXECUTION"
+    TRANSIENT_PROVIDER = "TRANSIENT_PROVIDER"
+    PERMANENT_PROVIDER = "PERMANENT_PROVIDER"
     CANCELLATION = "CANCELLATION"
     UNEXPECTED = "UNEXPECTED"
 
@@ -19,10 +24,17 @@ class ExecutionFailureKind(StrEnum):
 class ExecutionFailure(Exception):
     """A controlled execution failure returned by an executor."""
 
-    def __init__(self, kind: ExecutionFailureKind, message: str) -> None:
+    def __init__(
+        self,
+        kind: ExecutionFailureKind,
+        message: str,
+        *,
+        provider: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.kind = kind
         self.message = message
+        self.provider = provider
 
 
 @dataclass(frozen=True)
@@ -45,6 +57,8 @@ class ExecutionOutcome:
     output: dict[str, object]
     usage: dict[str, object] | None = None
     schema_version: str = "v1"
+    provider: str | None = None
+    finish_reason: str | None = None
 
 
 class JobExecutor(Protocol):

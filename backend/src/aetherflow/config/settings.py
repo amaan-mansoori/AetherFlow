@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     outbox_initial_backoff_seconds: float = Field(default=1.0, gt=0, le=3600)
     outbox_max_backoff_seconds: float = Field(default=300.0, gt=0, le=86400)
     outbox_publisher_id: str | None = Field(default=None, max_length=128)
+    provider_default: str = Field(default="mock", min_length=1, max_length=64)
 
     @field_validator("logging_level")
     @classmethod
@@ -54,6 +55,14 @@ class Settings(BaseSettings):
         normalized = value.upper()
         if normalized not in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
             raise ValueError("logging_level must be a standard Python logging level")
+        return normalized
+
+    @field_validator("provider_default")
+    @classmethod
+    def normalize_provider_default(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("provider_default must not be blank")
         return normalized
 
     @field_validator("cors_origins")

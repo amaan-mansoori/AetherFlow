@@ -38,7 +38,7 @@ Keys use `afk_<public-id>_<secret>`. The public ID is indexed for lookup; only a
 
 Submission body conceptually contains `job_type`, `model`, `input`, `configuration`, `priority`, `timeout`, `retry_policy`, `metadata`, and the `Idempotency-Key` header. Responses include job ID, state, timestamps, and links or identifiers for later inspection.
 
-The first workload is a bounded structured inference operation: a typed input object is submitted with an explicit output schema/version selected by `job_type`. The provider adapter returns normalized text/structured content and usage metadata; the domain validates the content against the job type's schema before creating `job_results`. Arbitrary tools, URLs, code, shell commands, and autonomous planning are not part of this contract.
+The first workload is a bounded structured inference operation: a typed input object is submitted with an explicit output schema/version selected by `job_type`. The provider adapter is selected by the runtime-configured provider registry and returns normalized text/structured content and usage metadata; the domain validates the content against the job type's schema before creating `job_results`. Provider credentials are not accepted in job configuration. Arbitrary tools, URLs, code, shell commands, and autonomous planning are not part of this contract.
 
 ## Health
 
@@ -49,15 +49,16 @@ The first workload is a bounded structured inference operation: a typed input ob
 
 The following routes are specified for a later phase and are not implemented in the Phase 3 backend: `GET /api/v1/admin/jobs`, `GET /api/v1/admin/workers`, `GET /api/v1/admin/queues`, `GET /api/v1/admin/audit-logs`, and `GET /api/v1/admin/metrics`. When added, operational endpoints must expose real observed data and enforce admin authorization.
 
-## Phase 4F status
+## Phase 5 status
 
-Implemented through Phase 4F: registration, identity/access, durable jobs,
+Implemented through Phase 5: registration, identity/access, durable jobs,
 idempotent submission, explicit versioned state transitions, attempts/results/
 events, cancellation, provider-independent worker execution, Kafka transport,
 transactional outbox publication, bounded dispatch retry, independent publisher
-runtime, and worker execution-lease recovery. Execution retry orchestration,
-schedulers, Redis, providers, admin operations routes, and frontend routes
-remain deferred.
+runtime, worker execution-lease recovery, provider registry, deterministic mock
+provider, normalized provider failures, and worker-enforced execution timeouts.
+External provider transport, execution retry orchestration, schedulers, Redis,
+admin operations routes, and frontend routes remain deferred.
 
 ## Contract rules
 

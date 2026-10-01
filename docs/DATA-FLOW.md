@@ -18,10 +18,11 @@
 1. Worker consumes a message in a consumer group.
 2. Worker starts a span, checks cancellation and terminal state, and claims the job using a compare-and-set transition to `RUNNING`.
 3. Worker creates an attempt record.
-4. Provider adapter applies timeout, provider error classification, and normalized response handling.
-5. Pydantic validation accepts or rejects structured output.
-6. A transaction persists result or failure, updates job state, and appends a job event.
-7. Worker publishes a lifecycle message; duplicate lifecycle publication is acceptable because consumers must be idempotent.
+4. `ProviderExecutor` resolves a configured provider through the registry; the adapter applies provider error classification and normalized response handling.
+5. The worker enforces the job timeout outside the database transaction.
+6. Pydantic validation accepts or rejects structured output.
+7. A transaction persists result or failure, updates job state, and appends a job event.
+8. Worker publishes a lifecycle message; duplicate lifecycle publication is acceptable because consumers must be idempotent.
 
 ## Read path
 

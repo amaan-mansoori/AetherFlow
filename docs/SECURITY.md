@@ -30,6 +30,17 @@ Redact authorization headers, API keys, passwords, provider credentials, raw pro
 
 Security audit events cover registration, successful/failed login, refresh creation/rotation/reuse failure, logout, API-key creation/revocation, and authorization denial. Audit context contains only safe metadata such as public key ID and reason.
 
+## Provider configuration
+
+Provider selection uses a non-secret identifier from job configuration or the
+runtime `provider_default` setting. Provider credentials are supplied only
+through deployment environment/secret management; job schemas reject
+credential-like keys, including nested configuration values, and provider
+adapters never receive database sessions or persist credentials. The
+deterministic mock provider requires no credentials. Provider errors and
+identifiers may be persisted in attempts, but raw prompts, outputs, and
+credentials are not logged by the provider boundary.
+
 ## Supply chain and containers
 
 Pin and review dependencies, scan dependencies and images in CI where practical, use minimal non-root images, read-only filesystems where feasible, drop Linux capabilities, and avoid privileged containers.

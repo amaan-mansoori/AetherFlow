@@ -38,6 +38,24 @@ class JobCreateRequest(BaseModel):
             raise ValueError("field must not be blank")
         return value.strip()
 
+    @field_validator("configuration")
+    @classmethod
+    def reject_provider_credentials(cls, value: dict[str, Any]) -> dict[str, Any]:
+        forbidden = {"api_key", "api_secret", "access_token", "credential", "secret", "token"}
+
+        def contains_forbidden_key(candidate: object) -> bool:
+            if isinstance(candidate, dict):
+                if forbidden.intersection(candidate):
+                    return True
+                return any(contains_forbidden_key(item) for item in candidate.values())
+            if isinstance(candidate, list):
+                return any(contains_forbidden_key(item) for item in candidate)
+            return False
+
+        if contains_forbidden_key(value):
+            raise ValueError("provider credentials must be configured by the runtime")
+        return value
+
 
 class JobResultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
