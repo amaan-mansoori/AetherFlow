@@ -5,9 +5,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import func, select, update
 
-from aetherflow.infrastructure.database.models import IdempotencyRecord, Job, OutboxDispatch
+from aetherflow.infrastructure.database.models import (
+    IdempotencyRecord,
+    Job,
+    OutboxDispatch,
+)
 from aetherflow.jobs.dispatch import DispatchFailure, DispatchMessage, LocalDispatcher
 from aetherflow.jobs.outbox import OutboxPublisher
+from aetherflow.jobs.outbox_runtime import OutboxPublisherRuntime, PublisherLifecycle
+from aetherflow.jobs.retry import RetryPolicy
 from aetherflow.jobs.schemas import JobCreateRequest
 from aetherflow.jobs.service import submit_job
 
@@ -254,3 +260,64 @@ async def test_malformed_outbox_schema_fails_without_dispatch(app) -> None:
         assert outbox.published_at is None
         assert outbox.last_error == "Unsupported outbox dispatch type or schema."
     assert dispatcher._messages.empty()
+
+
+@pytest.mark.asyncio
+async def test_outbox_retry_backoff_is_bounded_and_terminal(app) -> None:
+    await create_submission(app, "outbox-retry@example.com")
+    current = datetime(2026, 1, 1, tzinfo=UTC)
+    dispatcher = FailingDispatcher()
+    publisher = OutboxPublisher(
+        app.state.session_factory,
+        dispatcher,
+        publisher_id="publisher-retry",
+        retry_policy=RetryPolicy(
+            max_attempts=2,
+            initial_backoff_seconds=10,
+            max_backoff_seconds=15,
+        ),
+        now=lambda: current,
+    )
+
+    with pytest.raises(DispatchFailure):
+        await publisher.publish_once()
+    async with app.state.session_factory() as session:
+        record = await session.scalar(select(OutboxDispatch))
+        assert record is not None
+        assert record.publication_state == "PENDING"
+        assert record.next_attempt_at == (current + timedelta(seconds=10)).replace(tzinfo=None)
+
+    current = current + timedelta(seconds=10)
+    with pytest.raises(DispatchFailure):
+        await publisher.publish_once()
+    async with app.state.session_factory() as session:
+        record = await session.scalar(select(OutboxDispatch))
+        assert record is not None
+        assert record.publication_state == "PERMANENT_FAILURE"
+        assert record.next_attempt_at is None
+        assert record.attempt_count == 2
+
+
+@pytest.mark.asyncio
+async def test_publisher_runtime_stops_and_closes_resources(app) -> None:
+    class TrackingDispatcher(LocalDispatcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+    dispatcher = TrackingDispatcher()
+    publisher = OutboxPublisher(app.state.session_factory, dispatcher, publisher_id="runtime")
+    runtime = OutboxPublisherRuntime(
+        publisher,
+        dispatcher,
+        app.state.engine,
+        poll_interval_seconds=0.01,
+        batch_size=2,
+    )
+    await runtime.start()
+    await runtime.stop()
+    assert runtime.lifecycle == PublisherLifecycle.STOPPED
+    assert dispatcher.closed is True

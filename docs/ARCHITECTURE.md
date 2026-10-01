@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 4C transactional outbox implemented
+**Status:** Architecture / Specification Phase; Phase 4D/4E/4F reliability foundation implemented
 
 ## Decision summary
 
@@ -94,6 +94,25 @@ Kafka success but before finalization may publish a duplicate; existing worker
 version/state/CAS protections remain authoritative. SQLite tests validate
 portable publication behavior only; PostgreSQL locking semantics remain
 unverified.
+
+## Phase 4D/4E/4F reliability runtime
+
+`aetherflow.runtime.outbox_publisher` is an independent process entrypoint.
+`OutboxPublisherRuntime` polls bounded batches, continues after individual
+recoverable failures, and shuts down by stopping polling before closing the
+dispatcher and database engine. Poll interval, batch size, lease duration,
+publisher identity, retry limit, and backoff bounds are settings.
+
+Transient publication failures persist a bounded error, category, timestamp,
+attempt count, and deterministic next-attempt time. Attempts are capped; a
+permanent/invalid record becomes `PERMANENT_FAILURE` and is retained for
+diagnosis. Kafka I/O remains outside claim and finalization transactions.
+
+Workers persist an execution owner and lease while running. A restarted worker
+that receives a message for an expired execution lease deterministically
+recovers the job to `FAILED`, or to `SUCCEEDED` when a durable result already
+exists. Active leases are not stolen. This is crash recovery, not exactly-once
+execution.
 
 ## Data and consistency
 

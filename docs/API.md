@@ -49,9 +49,15 @@ The first workload is a bounded structured inference operation: a typed input ob
 
 The following routes are specified for a later phase and are not implemented in the Phase 3 backend: `GET /api/v1/admin/jobs`, `GET /api/v1/admin/workers`, `GET /api/v1/admin/queues`, `GET /api/v1/admin/audit-logs`, and `GET /api/v1/admin/metrics`. When added, operational endpoints must expose real observed data and enforce admin authorization.
 
-## Phase 3 status
+## Phase 4F status
 
-Implemented through Phase 3: registration, Argon2 password hashing, JWT access authentication, rotating hashed refresh sessions, logout, current-user retrieval, reusable authentication/admin dependencies, API-key lifecycle, audit persistence, identity migrations, durable job records, explicit versioned state transitions, idempotent submission, ownership/admin visibility, attempts, results, lifecycle events, and cancellation requests. Retry execution, workers, schedulers, Kafka, Redis, providers, distributed dispatch, admin operations routes, and frontend routes remain deferred. A retry action is intentionally deferred until execution and retry infrastructure exists.
+Implemented through Phase 4F: registration, identity/access, durable jobs,
+idempotent submission, explicit versioned state transitions, attempts/results/
+events, cancellation, provider-independent worker execution, Kafka transport,
+transactional outbox publication, bounded dispatch retry, independent publisher
+runtime, and worker execution-lease recovery. Execution retry orchestration,
+schedulers, Redis, providers, admin operations routes, and frontend routes
+remain deferred.
 
 ## Contract rules
 

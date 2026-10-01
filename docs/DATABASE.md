@@ -19,9 +19,9 @@
 | worker_heartbeats | Liveness history | worker_id, observed_at, load metadata |
 | audit_logs | Security/admin actions | actor, action, target, outcome, redacted metadata, timestamp |
 | idempotency_records | Submission deduplication | principal_id + key unique, fingerprint, job_id, response status, timestamps |
-| outbox_dispatches | Durable dispatch intent | job_id unique, immutable job/version/schema/enqueue data, publication timestamp, lease and failure metadata |
+| outbox_dispatches | Durable dispatch intent | job_id unique, immutable job/version/schema/enqueue data, publication state, retry schedule, lease and bounded failure metadata |
 
-Phase 2 creates `users`, `roles`, `user_roles`, `refresh_sessions`, `api_keys`, and `audit_logs`. Phase 3 adds `jobs`, `idempotency_records`, `job_attempts`, `job_results`, and `job_events`. Phase 4C adds `outbox_dispatches`. The migrations seed exactly `USER` and `ADMIN`. Refresh token values are represented only by SHA-256 hashes; API key secrets are represented only by SHA-256 hashes and an indexed public ID.
+Phase 2 creates `users`, `roles`, `user_roles`, `refresh_sessions`, `api_keys`, and `audit_logs`. Phase 3 adds `jobs`, `idempotency_records`, `job_attempts`, `job_results`, and `job_events`. Phase 4C adds `outbox_dispatches`; Phase 4D/4E adds its publication state, retry schedule, classification, and timestamps. Phase 4F adds `jobs.execution_owner`, `jobs.execution_dispatch_version`, and `jobs.execution_lease_until` for restart recovery and stale-message protection. The migrations seed exactly `USER` and `ADMIN`. Refresh token values are represented only by SHA-256 hashes; API key secrets are represented only by SHA-256 hashes and an indexed public ID.
 
 ## Relationships and lifecycle
 
@@ -35,7 +35,7 @@ Identity-specific indexes are email, role name, refresh token hash, refresh fami
 
 ## Concurrency
 
-State transitions use `UPDATE ... WHERE id = ? AND state = expected AND version = expected`, incrementing version and checking affected rows. Outbox publishers use short lease claims and PostgreSQL `SKIP LOCKED` when multiple publishers are deployed. Idempotency insertion relies on the unique constraint; a conflict reloads and compares the fingerprint. Attempt insertion requires `RUNNING`; result insertion is unique by job and occurs only from `RUNNING` or `CANCEL_REQUESTED`. SQLite does not prove PostgreSQL row-lock behavior.
+State transitions use `UPDATE ... WHERE id = ? AND state = expected AND version = expected`, incrementing version and checking affected rows. Outbox publishers use short lease claims and PostgreSQL `SKIP LOCKED` when multiple publishers are deployed. Retry eligibility is indexed by publication state, next-attempt timestamp, and creation order. Execution leases are only recoverable after expiry and are cleared by terminal worker decisions. Idempotency insertion relies on the unique constraint; a conflict reloads and compares the fingerprint. Attempt insertion requires `RUNNING`; result insertion is unique by job and occurs only from `RUNNING` or `CANCEL_REQUESTED`. SQLite does not prove PostgreSQL row-lock behavior.
 
 ## Migration policy
 

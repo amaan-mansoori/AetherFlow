@@ -11,6 +11,14 @@ class DispatchFailure(RuntimeError):
     """Raised when a dispatcher cannot accept a durable dispatch message."""
 
 
+class TransientDispatchFailure(DispatchFailure):
+    """A dispatch failure that may succeed on a later attempt."""
+
+
+class PermanentDispatchFailure(DispatchFailure):
+    """A dispatch failure caused by invalid, unsupported, or unsafe data."""
+
+
 @dataclass(frozen=True)
 class DispatchMessage:
     """Minimal broker-neutral message for one executable job."""

@@ -1,7 +1,8 @@
 """Transactional outbox publication and recovery boundary."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -10,7 +11,14 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from aetherflow.infrastructure.database.models import OutboxDispatch, utc_now
-from aetherflow.jobs.dispatch import DispatchFailure, DispatchMessage, JobDispatcher
+from aetherflow.jobs.dispatch import (
+    DispatchFailure,
+    DispatchMessage,
+    JobDispatcher,
+    PermanentDispatchFailure,
+    TransientDispatchFailure,
+)
+from aetherflow.jobs.retry import FailureCategory, RetryPolicy
 
 
 @dataclass(frozen=True)
@@ -32,6 +40,8 @@ class OutboxPublisher:
         *,
         publisher_id: str | None = None,
         lease_seconds: int = 60,
+        retry_policy: RetryPolicy | None = None,
+        now: Callable[[], datetime] = utc_now,
     ) -> None:
         if lease_seconds < 1:
             raise ValueError("lease_seconds must be positive")
@@ -39,6 +49,8 @@ class OutboxPublisher:
         self._dispatcher = dispatcher
         self._publisher_id = publisher_id or str(uuid4())
         self._lease_seconds = lease_seconds
+        self._retry_policy = retry_policy or RetryPolicy()
+        self._now = now
 
     async def publish_once(self) -> OutboxPublication | None:
         claimed = await self._claim_one()
@@ -46,8 +58,10 @@ class OutboxPublisher:
             return None
         if claimed.message_type != "JOB_DISPATCH" or claimed.schema_version != "v1":
             error = "Unsupported outbox dispatch type or schema."
-            await self._record_failure(claimed.id, error)
-            raise DispatchFailure(error)
+            await self._record_failure(
+                claimed.id, error, FailureCategory.PERMANENT_DISPATCH, terminal=True
+            )
+            raise PermanentDispatchFailure(error)
         message = DispatchMessage(
             job_id=claimed.job_id,
             job_version=claimed.job_version,
@@ -57,10 +71,21 @@ class OutboxPublisher:
         try:
             await self._dispatcher.dispatch(message)
         except Exception as exc:
-            await self._record_failure(claimed.id, str(exc))
+            retryable = not isinstance(exc, PermanentDispatchFailure)
+            category = (
+                FailureCategory.TRANSIENT_DISPATCH
+                if retryable and isinstance(exc, (DispatchFailure, OSError))
+                else FailureCategory.PERMANENT_DISPATCH
+            )
+            await self._record_failure(
+                claimed.id,
+                str(exc),
+                category,
+                terminal=not retryable or claimed.attempt_count >= self._retry_policy.max_attempts,
+            )
             if isinstance(exc, DispatchFailure):
                 raise
-            raise DispatchFailure("Outbox dispatch failed.") from exc
+            raise TransientDispatchFailure("Outbox dispatch failed.") from exc
         await self._mark_published(claimed.id)
         return OutboxPublication(claimed.id, claimed.job_id, True)
 
@@ -81,13 +106,18 @@ class OutboxPublisher:
         return publications
 
     async def _claim_one(self) -> OutboxDispatch | None:
-        now = utc_now()
+        now = self._now()
         lease_until = now + timedelta(seconds=self._lease_seconds)
         async with self._session_factory() as session:
             query = (
                 select(OutboxDispatch)
                 .where(
                     OutboxDispatch.published_at.is_(None),
+                    OutboxDispatch.publication_state == "PENDING",
+                    or_(
+                        OutboxDispatch.next_attempt_at.is_(None),
+                        OutboxDispatch.next_attempt_at <= now,
+                    ),
                     or_(
                         OutboxDispatch.lease_until.is_(None),
                         OutboxDispatch.lease_until < now,
@@ -106,7 +136,17 @@ class OutboxPublisher:
             await session.commit()
             return record
 
-    async def _record_failure(self, outbox_id: UUID, error: str) -> None:
+    async def _record_failure(
+        self,
+        outbox_id: UUID,
+        error: str,
+        category: FailureCategory,
+        *,
+        terminal: bool,
+    ) -> None:
+        now = self._now()
+        attempt = await self._attempt_count(outbox_id)
+        next_attempt = None if terminal else now + self._retry_policy.delay_for_attempt(attempt)
         async with self._session_factory() as session:
             await session.execute(
                 update(OutboxDispatch)
@@ -118,9 +158,18 @@ class OutboxPublisher:
                     lease_owner=None,
                     lease_until=None,
                     last_error=error[:4000],
+                    last_error_at=now,
+                    failure_category=category.value,
+                    publication_state="PERMANENT_FAILURE" if terminal else "PENDING",
+                    next_attempt_at=next_attempt,
                 )
             )
             await session.commit()
+
+    async def _attempt_count(self, outbox_id: UUID) -> int:
+        async with self._session_factory() as session:
+            record = await session.get(OutboxDispatch, outbox_id)
+            return 0 if record is None else record.attempt_count
 
     async def _mark_published(self, outbox_id: UUID) -> None:
         async with self._session_factory() as session:
@@ -131,13 +180,18 @@ class OutboxPublisher:
                     .where(
                         OutboxDispatch.id == outbox_id,
                         OutboxDispatch.published_at.is_(None),
+                        OutboxDispatch.publication_state == "PENDING",
                         OutboxDispatch.lease_owner == self._publisher_id,
                     )
                     .values(
-                        published_at=datetime.now(UTC),
+                        published_at=self._now(),
                         lease_owner=None,
                         lease_until=None,
                         last_error=None,
+                        last_error_at=None,
+                        failure_category=None,
+                        publication_state="PUBLISHED",
+                        next_attempt_at=None,
                     )
                 ),
             )

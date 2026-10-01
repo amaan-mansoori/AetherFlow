@@ -166,6 +166,9 @@ class Job(Base):
     metadata_: Mapped[dict[str, object]] = mapped_column("metadata", JSON, default=dict)
     state: Mapped[JobState] = mapped_column(String(32), default=JobState.ACCEPTED, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
+    execution_owner: Mapped[str | None] = mapped_column(String(128))
+    execution_dispatch_version: Mapped[int | None] = mapped_column(Integer)
+    execution_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
@@ -275,6 +278,10 @@ class OutboxDispatch(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(Text)
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    failure_category: Mapped[str | None] = mapped_column(String(64))
+    publication_state: Mapped[str] = mapped_column(String(32), default="PENDING")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     lease_owner: Mapped[str | None] = mapped_column(String(128))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 

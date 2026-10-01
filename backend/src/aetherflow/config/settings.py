@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     kafka_client_id: str = "aetherflow"
     kafka_auto_offset_reset: Literal["earliest", "latest"] = "earliest"
     kafka_producer_enable_idempotence: bool = True
+    outbox_poll_interval_seconds: float = Field(default=1.0, gt=0, le=300)
+    outbox_batch_size: int = Field(default=100, ge=1, le=1000)
+    outbox_lease_seconds: int = Field(default=60, ge=1, le=3600)
+    outbox_max_attempts: int = Field(default=5, ge=1, le=100)
+    outbox_initial_backoff_seconds: float = Field(default=1.0, gt=0, le=3600)
+    outbox_max_backoff_seconds: float = Field(default=300.0, gt=0, le=86400)
+    outbox_publisher_id: str | None = Field(default=None, max_length=128)
 
     @field_validator("logging_level")
     @classmethod

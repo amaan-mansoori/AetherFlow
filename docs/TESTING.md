@@ -59,3 +59,11 @@ successful publication/finalization, publication failure recovery metadata,
 published-record skipping, and bounded multi-record publication. These tests
 use SQLite for deterministic portable behavior and do not prove PostgreSQL
 `SKIP LOCKED` concurrency.
+
+## Phase 4D/4E/4F reliability coverage
+
+Reliability tests cover bounded publisher runtime start/stop and resource
+closure, retry attempt scheduling and terminal cutoff, deterministic backoff,
+permanent malformed records, lease recovery, and worker recovery of expired
+execution leases. Tests use injected time where retry timing matters. They do
+not claim SQLite proves PostgreSQL locking or Kafka broker behavior.

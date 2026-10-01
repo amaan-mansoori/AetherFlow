@@ -84,3 +84,14 @@ future-phase requirements.
 
 Redis, scheduler, execution retries, providers, admin operations, frontend,
 and deployment remain future-phase requirements.
+
+## Phase 4D/4E/4F implementation mapping
+
+| Requirement | Component | Database | Test | Documentation |
+|---|---|---|---|---|
+| Independent bounded publisher | `runtime/outbox_publisher.py`, `jobs/outbox_runtime.py` | outbox claims/leases | runtime lifecycle tests | ARCHITECTURE, RELIABILITY |
+| Bounded dispatch retry | `jobs/retry.py`, `jobs/outbox.py` | retry metadata and eligibility index | backoff/terminal tests | DATABASE, RELIABILITY |
+| Worker crash recovery | `jobs/worker.py` | execution owner/lease | expired lease recovery test | ARCHITECTURE, RELIABILITY |
+
+PostgreSQL concurrency and Kafka runtime integration remain environment-gated
+verification rather than claims made by SQLite/fake-client tests.

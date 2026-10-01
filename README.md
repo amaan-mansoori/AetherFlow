@@ -2,9 +2,15 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 4C - Transactional outbox dispatch foundation**
+> **Current status: Phase 4D/4E/4F - Reliable dispatch and worker recovery foundation**
 
-Phase 4C transactionally records each job's Kafka dispatch intent with durable job creation, then lets an independent outbox publisher recover Kafka publication failures. Kafka is not required for deterministic unit tests and is not claimed as locally verified unless a broker is available. Redis, AI providers, retries, schedulers, frontend, Kubernetes, and production observability remain deferred.
+Phase 4C transactionally records each job's Kafka dispatch intent with durable
+job creation. Phase 4D/4E add an independent bounded publisher runtime with
+lease recovery, typed failures, persisted retry scheduling, and bounded
+backoff. Phase 4F adds worker execution leases and deterministic stale-execution
+recovery. Kafka is not required for deterministic unit tests and is not claimed
+as locally verified unless a broker is available. Redis, providers, schedulers,
+frontend, Kubernetes, and production observability remain deferred.
 
 ## Local backend setup
 

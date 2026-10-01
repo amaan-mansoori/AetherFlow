@@ -1,11 +1,12 @@
 """Focused tests for the Phase 4A execution and dispatch contracts."""
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from aetherflow.infrastructure.database.models import Job, JobAttempt, JobState
 from aetherflow.jobs.dispatch import DispatchFailure, DispatchMessage, LocalDispatcher
@@ -220,6 +221,168 @@ async def test_worker_rejects_terminal_job_as_ineligible(app) -> None:
     result = await worker.run_once()
 
     assert result.status == WorkerResultStatus.INELIGIBLE
+
+
+@pytest.mark.asyncio
+async def test_worker_recovers_expired_execution_lease_after_restart(app) -> None:
+    job, _ = await create_job(app, "phase4a-recovery@example.com")
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(
+                state=JobState.RUNNING,
+                version=2,
+                execution_owner="crashed-worker",
+                execution_lease_until=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+
+    dispatcher = LocalDispatcher()
+    await dispatcher.dispatch(DispatchMessage(job.id, 2, datetime.now(UTC)))
+    worker = Worker(app.state.session_factory, dispatcher, SuccessfulExecutor())
+    result = await worker.run_once()
+
+    assert result.status == WorkerResultStatus.FAILED
+    async with app.state.session_factory() as session:
+        stored = await session.scalar(select(Job).where(Job.id == job.id))
+        assert stored is not None
+        assert stored.state == JobState.FAILED
+        assert stored.execution_lease_until is None
+
+
+@pytest.mark.asyncio
+async def test_worker_recovers_original_dispatch_after_execution_crash(app) -> None:
+    job, _ = await create_job(app, "phase4a-crash-redelivery@example.com")
+    dispatcher = LocalDispatcher()
+    message = message_for(job)
+    await dispatcher.dispatch(message)
+    worker = Worker(app.state.session_factory, dispatcher, SuccessfulExecutor())
+
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(
+                state=JobState.RUNNING,
+                version=3,
+                execution_owner="crashed-worker",
+                execution_dispatch_version=message.job_version,
+                execution_lease_until=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+
+    result = await worker.run_once()
+
+    assert result.status == WorkerResultStatus.FAILED
+    assert worker._executor.calls == 0
+    async with app.state.session_factory() as session:
+        stored = await session.scalar(select(Job).where(Job.id == job.id))
+        assert stored is not None
+        assert stored.state == JobState.FAILED
+
+
+@pytest.mark.asyncio
+async def test_worker_does_not_steal_active_execution_lease(app) -> None:
+    job, _ = await create_job(app, "phase4a-active-lease@example.com")
+    dispatcher = LocalDispatcher()
+    message = message_for(job)
+    await dispatcher.dispatch(message)
+    executor = SuccessfulExecutor()
+    worker = Worker(app.state.session_factory, dispatcher, executor, worker_id="worker-b")
+
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(
+                state=JobState.RUNNING,
+                version=3,
+                execution_owner="worker-a",
+                execution_dispatch_version=message.job_version,
+                execution_lease_until=datetime.now(UTC) + timedelta(minutes=5),
+            )
+        )
+        await session.commit()
+
+    result = await worker.run_once()
+
+    assert result.status == WorkerResultStatus.INELIGIBLE
+    assert executor.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_worker_rejects_stale_message_for_running_execution(app) -> None:
+    job, _ = await create_job(app, "phase4a-running-stale@example.com")
+    dispatcher = LocalDispatcher()
+    current_message = message_for(job)
+    await dispatcher.dispatch(
+        DispatchMessage(job.id, current_message.job_version - 1, current_message.enqueued_at)
+    )
+    executor = SuccessfulExecutor()
+    worker = Worker(app.state.session_factory, dispatcher, executor, worker_id="worker-b")
+
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(
+                state=JobState.RUNNING,
+                version=3,
+                execution_owner="worker-a",
+                execution_dispatch_version=current_message.job_version,
+                execution_lease_until=datetime.now(UTC) - timedelta(minutes=5),
+            )
+        )
+        await session.commit()
+
+    result = await worker.run_once()
+
+    assert result.status == WorkerResultStatus.INELIGIBLE
+    assert executor.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_worker_recovers_expired_execution_with_durable_result(app) -> None:
+    job, _ = await create_job(app, "phase4a-durable-result@example.com")
+    dispatcher = LocalDispatcher()
+    message = message_for(job)
+    executor = SuccessfulExecutor()
+
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(Job)
+            .where(Job.id == job.id)
+            .values(
+                state=JobState.RUNNING,
+                version=3,
+                execution_owner="crashed-worker",
+                execution_dispatch_version=message.job_version,
+                execution_lease_until=datetime.now(UTC) - timedelta(seconds=1),
+            )
+        )
+        await session.commit()
+        loaded = await session.scalar(
+            select(Job).options(selectinload(Job.result)).where(Job.id == job.id)
+        )
+        assert loaded is not None
+        from aetherflow.jobs.service import record_job_result
+
+        await record_job_result(session, job.id, {"recovered": True})
+
+    await dispatcher.dispatch(message)
+    result = await Worker(
+        app.state.session_factory, dispatcher, executor, worker_id="worker-b"
+    ).run_once()
+
+    assert result.status == WorkerResultStatus.SUCCEEDED
+    assert executor.calls == 0
+    async with app.state.session_factory() as session:
+        stored = await session.scalar(select(Job).where(Job.id == job.id))
+        assert stored is not None
+        assert stored.state == JobState.SUCCEEDED
 
 
 @pytest.mark.asyncio

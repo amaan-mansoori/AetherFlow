@@ -8,7 +8,12 @@ from typing import Protocol, Self, cast
 from uuid import UUID
 
 from aetherflow.config.settings import Settings
-from aetherflow.jobs.dispatch import DispatchFailure, DispatchMessage, JobDispatcher
+from aetherflow.jobs.dispatch import (
+    DispatchFailure,
+    DispatchMessage,
+    JobDispatcher,
+    TransientDispatchFailure,
+)
 from aetherflow.jobs.worker import Worker
 
 KAFKA_MESSAGE_SCHEMA = "aetherflow.job-dispatch.v1"
@@ -194,7 +199,7 @@ class KafkaDispatcher(JobDispatcher):
                 value=serialize_dispatch_message(message),
             )
         except Exception as exc:
-            raise DispatchFailure("Kafka dispatch failed.") from exc
+            raise TransientDispatchFailure("Kafka dispatch failed.") from exc
 
     async def receive(self) -> DispatchMessage:
         if self._consumer is None:

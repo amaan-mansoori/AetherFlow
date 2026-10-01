@@ -50,9 +50,9 @@ dispatcher is only a deterministic test adapter.
 
 Submission idempotency remains a durable database guarantee. It is distinct from
 future at-least-once message delivery and from execution deduplication. Phase
-4A does not claim exactly-once processing, retries, backoff, dead-lettering, or
-provider-side cancellation. Those require later broker, scheduler, and provider
-work.
+4A did not claim exactly-once processing, retries, backoff, dead-lettering, or
+provider-side cancellation. Dispatch retry and worker crash recovery are
+defined in the later sections; execution retry orchestration remains deferred.
 
 ## Phase 4B Kafka acknowledgement model
 
@@ -62,8 +62,8 @@ group by default. Auto-commit is disabled. The consumer validates a message,
 the `KafkaWorkerRunner` invokes the existing worker, and only then is the
 offset committed. A malformed or unsupported message is surfaced as a dispatch
 failure and is not acknowledged. A worker crash before commit can redeliver the
-message. The API owns a producer-only dispatcher; consumption belongs to an
-independent worker runtime.
+message. Publication belongs to the independent outbox runtime; consumption
+belongs to an independent worker runtime.
 
 The producer waits for Kafka acknowledgement with `acks=all` and producer
 idempotence enabled by default. This is producer delivery behavior, not an
@@ -83,3 +83,27 @@ publication. Failures clear the lease and retain attempt/error metadata for
 recovery. A publisher crash after Kafka publication and before the marker
 commit can cause duplicate publication; this is at-least-once dispatch, not
 exactly-once delivery or execution.
+
+## Phase 4D/4E publisher runtime and retry policy
+
+The independent publisher runtime polls bounded batches and preserves the
+claim-commit-publish-finalize sequence. It stops polling before closing Kafka
+and database resources. Individual failures do not terminate the runtime.
+
+Transient dispatch failures use deterministic exponential backoff capped by
+configuration. The outbox stores attempt count, failure category, bounded
+error text, failure timestamp, and next eligible attempt. Once the configured
+attempt limit is reached, the row becomes `PERMANENT_FAILURE`; the original
+intent remains auditable and is not silently deleted. Invalid schema/type data
+is permanent and is never retried.
+
+## Phase 4F worker recovery
+
+The worker records an execution lease and the dispatch version that started it
+before invoking the executor. A duplicate message during an active lease is
+ineligible. After lease expiry, a redelivery of that execution's dispatch
+recovers a `RUNNING` job to `FAILED`, unless a durable result already exists,
+in which case it completes the job as `SUCCEEDED`. A different stale message
+cannot trigger recovery for a newer execution. This closes the
+committed-running crash window without an in-memory deduplication mechanism.
+Cancellation races continue to use the existing state machine and CAS rules.
