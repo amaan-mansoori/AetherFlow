@@ -139,6 +139,12 @@ cancellation, and unexpected categories. Provider execution remains outside
 database transactions. Execution retry orchestration and external provider
 transport remain separate future decisions.
 
+Phase 9 adds one `OpenAICompatibleAdapter` behind this same boundary. It uses
+a reusable bounded async HTTP client in the worker process, allowlists
+`temperature` and `max_tokens`, and normalizes chat content and usage into
+`ExecutionOutcome`. It does not contain retry logic; Phase 6 remains the
+single retry authority.
+
 ## Phase 6 durable execution retry
 
 Phase 6 distinguishes dispatch publication retry from provider execution

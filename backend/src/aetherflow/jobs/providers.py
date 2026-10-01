@@ -13,6 +13,7 @@ from aetherflow.jobs.execution import (
     ExecutionRequest,
     JobExecutor,
 )
+from aetherflow.jobs.openai import OpenAICompatibleAdapter
 from aetherflow.observability.metrics import METRICS
 
 
@@ -45,6 +46,10 @@ class ProviderRegistry:
         if adapter.name in self._adapters:
             raise ValueError(f"provider already registered: {adapter.name}")
         self._adapters[adapter.name] = adapter
+
+    @property
+    def adapters(self) -> tuple[ProviderAdapter, ...]:
+        return tuple(self._adapters.values())
 
     def resolve(self, provider: str, model: str) -> ProviderAdapter:
         adapter = self._adapters.get(provider)
@@ -162,6 +167,14 @@ class ProviderExecutor(JobExecutor):
             )
         )
 
+    async def close(self) -> None:
+        """Close provider clients owned by registered adapters."""
+
+        for adapter in self._registry.adapters:
+            close = getattr(adapter, "close", None)
+            if close is not None:
+                await close()
+
 
 class MockProviderAdapter:
     """Deterministic local provider for development, tests, and CI."""
@@ -221,4 +234,15 @@ def create_default_provider_executor(settings: Settings) -> ProviderExecutor:
 
     registry = ProviderRegistry()
     registry.register(MockProviderAdapter())
+    if settings.provider_openai_api_key:
+        registry.register(
+            OpenAICompatibleAdapter(
+                settings.provider_openai_api_key,
+                base_url=settings.provider_openai_base_url,
+                timeout_seconds=settings.provider_openai_timeout_seconds,
+                max_connections=settings.provider_openai_max_connections,
+            )
+        )
+    elif settings.provider_default == "openai":
+        raise ValueError("provider_openai_api_key is required when openai is selected")
     return ProviderExecutor(registry, default_provider=settings.provider_default)

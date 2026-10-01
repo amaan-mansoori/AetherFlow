@@ -127,6 +127,11 @@ attempt budget. `VALIDATION`, `AUTHENTICATION`, `PERMANENT_PROVIDER`,
 `CANCELLATION`, `UNEXPECTED`, and legacy `EXECUTION` failures are terminal.
 Backoff is deterministic, capped exponential, and jitter is not applied.
 
+The Phase 9 OpenAI-compatible adapter maps rate limits, network timeouts, and
+5xx responses to these retryable categories. Authentication, malformed
+responses, and rejected requests remain terminal. The adapter has no
+provider-specific retry loop.
+
 The worker atomically records bounded failure metadata, clears the execution
 lease, transitions `RUNNING -> RETRY_SCHEDULED`, and creates a future-dated
 outbox intent. The outbox publisher is the retry dispatcher: it claims only

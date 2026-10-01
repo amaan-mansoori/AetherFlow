@@ -13,16 +13,18 @@ async def run() -> None:
     settings = get_settings()
     engine = create_engine(settings)
     dispatcher = await KafkaDispatcher.create_worker_dispatcher(settings)
+    executor = create_default_provider_executor(settings)
     worker = Worker(
         create_session_factory(engine),
         dispatcher,
-        create_default_provider_executor(settings),
+        executor,
         worker_id=settings.worker_id,
     )
     runner = KafkaWorkerRunner(dispatcher, worker)
     try:
         await runner.run_forever()
     finally:
+        await executor.close()
         await dispatcher.close()
         await engine.dispose()
 

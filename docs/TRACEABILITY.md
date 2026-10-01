@@ -108,8 +108,9 @@ verification rather than claims made by SQLite/fake-client tests.
 | Execution timeout | `jobs/worker.py` | existing attempt/state/lease fields | timeout durability test | RELIABILITY, DATA-FLOW |
 | Provider credential protection | `JobCreateRequest`, runtime settings | no credential columns | schema rejection test | SECURITY, API |
 
-External provider transport remains deferred; real PostgreSQL, Kafka, and
-external-provider verification are environment-gated.
+Real provider transport is implemented through the OpenAI-compatible adapter;
+real provider credentials and PostgreSQL/Kafka/external-provider verification
+remain environment-gated.
 
 ## Phase 6 implementation mapping
 

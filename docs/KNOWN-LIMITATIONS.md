@@ -33,6 +33,7 @@
   outcome; Phase 6 retries only the resulting durable failure path and does
   not resume an interrupted provider call or claim exactly-once execution.
 - Phase 5 implements the provider boundary and deterministic mock provider,
-  but no external provider adapter is included or verified. Phase 6 execution
+  and Phase 9 includes one OpenAI-compatible adapter, but external provider
+  credentials and smoke validation remain environment-dependent. Phase 6 execution
   retry is locally tested with SQLite and deterministic fakes; PostgreSQL row
   locking and Kafka broker behavior remain unverified.

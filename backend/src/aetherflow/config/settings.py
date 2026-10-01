@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     outbox_max_backoff_seconds: float = Field(default=300.0, gt=0, le=86400)
     outbox_publisher_id: str | None = Field(default=None, max_length=128)
     provider_default: str = Field(default="mock", min_length=1, max_length=64)
+    provider_openai_api_key: str | None = Field(default=None, min_length=1)
+    provider_openai_base_url: str = "https://api.openai.com/v1"
+    provider_openai_max_connections: int = Field(default=10, ge=1, le=100)
+    provider_openai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
 
     @field_validator("logging_level")
     @classmethod
@@ -69,6 +73,14 @@ class Settings(BaseSettings):
             raise ValueError("provider_default must not be blank")
         return normalized
 
+    @field_validator("provider_openai_base_url")
+    @classmethod
+    def validate_provider_openai_base_url(cls, value: str) -> str:
+        normalized = value.strip().rstrip("/")
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("provider_openai_base_url must be an HTTP(S) URL")
+        return normalized
+
     @field_validator("cors_origins")
     @classmethod
     def validate_cors_origins(cls, value: list[str], info: object) -> list[str]:
@@ -84,6 +96,10 @@ class Settings(BaseSettings):
             raise ValueError("secure_cookies must be enabled in production")
         if self.environment == "production" and not self.kafka_enabled:
             raise ValueError("kafka_enabled must be enabled in production")
+        if self.provider_default == "openai" and not self.provider_openai_api_key:
+            raise ValueError(
+                "provider_openai_api_key is required when openai is the default provider"
+            )
         return self
 
 

@@ -50,6 +50,12 @@ deterministic mock provider requires no credentials. Provider errors and
 identifiers may be persisted in attempts, but raw prompts, outputs, and
 credentials are not logged by the provider boundary.
 
+Phase 9 provider credentials are read only from
+`AETHERFLOW_PROVIDER_OPENAI_API_KEY`. They are held by the worker-side HTTP
+adapter and are never persisted in jobs, attempts, events, Kafka payloads,
+metrics, API responses, or exception messages. Provider request and response
+bodies are not logged.
+
 ## Supply chain and containers
 
 Pin and review dependencies, scan dependencies and images in CI where practical, use minimal non-root images, read-only filesystems where feasible, drop Linux capabilities, and avoid privileged containers.

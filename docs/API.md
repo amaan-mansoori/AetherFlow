@@ -62,8 +62,12 @@ events, cancellation, provider-independent worker execution, Kafka transport,
 transactional outbox publication, bounded dispatch retry, independent publisher
 runtime, worker execution-lease recovery, provider registry, deterministic mock
 provider, normalized provider failures, and worker-enforced execution timeouts.
-External provider transport, execution retry orchestration, schedulers, Redis,
-admin operations routes, and frontend routes remain deferred.
+Execution retry orchestration, schedulers, Redis, admin operations routes, and
+frontend routes remain deferred.
+
+The worker may select the configured `openai` provider, but provider
+credentials are runtime environment settings and cannot be supplied through
+the job API.
 
 ## Contract rules
 

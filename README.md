@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 8 - Production infrastructure and deployment foundation**
+> **Current status: Phase 9 - Real provider integration and production validation**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -15,8 +15,11 @@ verified unless a broker is available. Real external providers, execution
 Phase 6 adds deterministic bounded execution retry, durable future retry
 dispatch intents, and cancellation-safe failure recovery. Phase 7 adds
 process-local Prometheus-compatible metrics and dependency-aware health checks.
-External Prometheus storage, dashboards, alerting, Redis, frontend, Kubernetes,
-and external providers remain deferred.
+Phase 9 adds an isolated OpenAI-compatible provider adapter. The deterministic
+mock remains the default and no provider credential is stored in jobs, Kafka,
+logs, metrics, or API responses. External Prometheus storage, dashboards,
+alerting, Redis, frontend, Kubernetes, and real-provider validation remain
+environment-dependent.
 
 ## Local production-like Compose stack
 

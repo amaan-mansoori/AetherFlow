@@ -76,6 +76,13 @@ validation, worker result and attempt persistence, timeout durability, and
 rejection of provider credentials in job configuration. Provider tests use no
 external credentials or network; they do not verify an external provider.
 
+## Phase 9 real provider adapter coverage
+
+The OpenAI-compatible adapter is tested with `httpx.MockTransport`; tests cover
+normalized output and usage, authentication, rate limits, timeout, 5xx,
+permanent 4xx, malformed responses, allowlisted configuration, and secret
+non-leakage. Tests do not require network access or provider credentials.
+
 ## Phase 6 execution retry coverage
 
 Phase 6 tests cover deterministic retry classification and capped backoff,
