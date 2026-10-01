@@ -12,6 +12,7 @@ from aetherflow.jobs.idempotency import compute_payload_fingerprint, validate_id
 from aetherflow.jobs.schemas import JobCreateRequest
 from aetherflow.jobs.service import (
     cancel_job,
+    get_job,
     record_job_attempt,
     record_job_result,
     submit_job,
@@ -510,6 +511,61 @@ async def test_domain_state_transitions_and_concurrency_versioning(app) -> None:
         with pytest.raises(ApiError) as exc:
             await cancel_job(session, user, job_id)
         assert exc.value.code == "INVALID_STATE_TRANSITION"
+
+
+@pytest.mark.asyncio
+async def test_state_transition_rejects_stale_expected_version(app) -> None:
+    from aetherflow.auth.service import register_user
+
+    async with app.state.session_factory() as session:
+        user = await register_user(
+            session, "stale-version@example.com", "correct horse battery staple", None
+        )
+        job, _ = await submit_job(
+            session,
+            user,
+            JobCreateRequest(model="mock-gpt", input={"prompt": "stale version"}),
+            "stale-version-key",
+        )
+        job = await transition_job_state(session, job.id, JobState.QUEUED, "dispatcher")
+
+        with pytest.raises(ApiError) as exc:
+            await transition_job_state(
+                session,
+                job.id,
+                JobState.CANCEL_REQUESTED,
+                "user:stale-version",
+                expected_version=1,
+            )
+        assert exc.value.code == "CONFLICT"
+
+        refreshed = await get_job(session, user, job.id)
+        assert refreshed.state == JobState.QUEUED
+        assert refreshed.version == 2
+
+
+@pytest.mark.asyncio
+async def test_attempt_and_result_require_execution_state(app) -> None:
+    from aetherflow.auth.service import register_user
+
+    async with app.state.session_factory() as session:
+        user = await register_user(
+            session, "execution-state@example.com", "correct horse battery staple", None
+        )
+        job, _ = await submit_job(
+            session,
+            user,
+            JobCreateRequest(model="mock-gpt", input={"prompt": "state guard"}),
+            "execution-state-key",
+        )
+
+        with pytest.raises(ApiError) as attempt_error:
+            await record_job_attempt(session, job.id, 1, "RUNNING")
+        assert attempt_error.value.code == "INVALID_STATE_TRANSITION"
+
+        with pytest.raises(ApiError) as result_error:
+            await record_job_result(session, job.id, {"classification": "positive"})
+        assert result_error.value.code == "INVALID_STATE_TRANSITION"
 
 
 @pytest.mark.asyncio

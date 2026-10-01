@@ -41,3 +41,15 @@
 | Identity migration | Alembic revision | N/A | all Phase 2 identity tables | migration upgrade/downgrade | DATABASE, DEPLOYMENT |
 
 This matrix is intentionally a phase-0 contract. Test file names and concrete component symbols will be added when implementation begins.
+
+## Phase 3 implementation mapping
+
+| Requirement | Component | API | Database | Test | Documentation |
+|---|---|---|---|---|---|
+| Durable job submission | `jobs/service.py`, job routes | `POST /api/v1/jobs` | `jobs`, `job_events` | `test_jobs.py` | API, DATABASE |
+| Idempotency | `jobs/idempotency.py`, `jobs/service.py` | `POST /api/v1/jobs` + `Idempotency-Key` | `idempotency_records` | replay, mismatch, principal-scope tests; concurrent PostgreSQL verification pending | ARCHITECTURE, DATABASE |
+| State machine and CAS | `jobs/state_machine.py`, `jobs/service.py` | lifecycle actions | `jobs`, `job_events` | legal/illegal/stale-version tests | RELIABILITY, DATABASE |
+| Ownership and cancellation | job routes and services | job read/events/attempts/cancel routes | `jobs`, `job_events` | ownership/admin/cancellation tests | API, SECURITY |
+| Attempts and results | `jobs/service.py` | job detail subresources | `job_attempts`, `job_results` | uniqueness and eligibility tests | DATABASE, TESTING |
+
+Worker execution, retry execution, Kafka, Redis, provider integration, admin operations, frontend, and deployment remain future-phase requirements.

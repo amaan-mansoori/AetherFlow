@@ -1,9 +1,10 @@
 """Job domain application services."""
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -177,11 +178,8 @@ async def cancel_job(
     request_id: str | None = None,
 ) -> Job:
     """Request job cancellation via the authoritative state machine."""
-    query = (
-        select(Job)
-        .options(selectinload(Job.result), selectinload(Job.attempts))
-        .where(Job.id == job_id)
-        .with_for_update()
+    query = select(Job).options(selectinload(Job.result), selectinload(Job.attempts)).where(
+        Job.id == job_id
     )
     if not await is_admin_user(session, user):
         query = query.where(Job.user_id == user.id)
@@ -205,23 +203,14 @@ async def cancel_job(
     # Validate transition through state machine
     validate_transition(job.state, JobState.CANCEL_REQUESTED)
 
-    prior_state = job.state
-    job.state = JobState.CANCEL_REQUESTED
-    job.version += 1
-    job.updated_at = utc_now()
-
-    event = JobEvent(
-        job_id=job.id,
-        event_type="CANCEL_REQUESTED",
-        prior_state=prior_state,
-        next_state=JobState.CANCEL_REQUESTED,
+    return await transition_job_state(
+        session,
+        job_id,
+        JobState.CANCEL_REQUESTED,
         actor=f"user:{user.id}",
         payload={"request_id": request_id, "reason": "user_cancellation_request"},
+        expected_version=job.version,
     )
-    session.add(event)
-    await session.commit()
-    await session.refresh(job)
-    return job
 
 
 async def transition_job_state(
@@ -230,8 +219,9 @@ async def transition_job_state(
     target_state: JobState,
     actor: str,
     payload: dict[str, Any] | None = None,
+    expected_version: int | None = None,
 ) -> Job:
-    """Centralized CAS state transition helper for worker/domain operations."""
+    """Apply a state transition with explicit state/version compare-and-set semantics."""
     job = await session.scalar(
         select(Job)
         .options(selectinload(Job.result), selectinload(Job.attempts))
@@ -244,13 +234,36 @@ async def transition_job_state(
     validate_transition(job.state, target_state)
 
     prior_state = job.state
-    job.state = target_state
-    job.version += 1
-    job.updated_at = utc_now()
+    prior_version = job.version if expected_version is None else expected_version
+    updated_at = utc_now()
+    cas_result = cast(
+        CursorResult[Any],
+        await session.execute(
+            update(Job)
+            .where(
+                Job.id == job_id,
+                Job.state == prior_state,
+                Job.version == prior_version,
+            )
+            .values(state=target_state, version=Job.version + 1, updated_at=updated_at)
+        ),
+    )
+    if cas_result.rowcount != 1:
+        await session.rollback()
+        await session.refresh(job)
+        raise ApiError(
+            "CONFLICT",
+            "The job changed before the requested state transition was applied.",
+            409,
+        )
 
     event = JobEvent(
         job_id=job.id,
-        event_type=f"STATE_CHANGED_TO_{target_state}",
+        event_type=(
+            "CANCEL_REQUESTED"
+            if target_state == JobState.CANCEL_REQUESTED
+            else f"STATE_CHANGED_TO_{target_state}"
+        ),
         prior_state=prior_state,
         next_state=target_state,
         actor=actor,
@@ -278,6 +291,16 @@ async def record_job_attempt(
     trace_id: str | None = None,
 ) -> JobAttempt:
     """Record a job execution attempt with unique attempt numbering."""
+    job = await session.scalar(select(Job).where(Job.id == job_id))
+    if job is None:
+        raise ApiError("NOT_FOUND", "Job not found.", 404)
+    if job.state != JobState.RUNNING:
+        raise ApiError(
+            "INVALID_STATE_TRANSITION",
+            f"Cannot record an attempt while job is in state '{job.state}'.",
+            409,
+        )
+
     attempt = JobAttempt(
         job_id=job_id,
         attempt_number=attempt_number,
@@ -314,6 +337,16 @@ async def record_job_result(
     usage: dict[str, Any] | None = None,
 ) -> JobResult:
     """Record validated output for a job with uniqueness protection."""
+    job = await session.scalar(select(Job).where(Job.id == job_id))
+    if job is None:
+        raise ApiError("NOT_FOUND", "Job not found.", 404)
+    if job.state not in {JobState.RUNNING, JobState.CANCEL_REQUESTED}:
+        raise ApiError(
+            "INVALID_STATE_TRANSITION",
+            f"Cannot record a result while job is in state '{job.state}'.",
+            409,
+        )
+
     result = JobResult(
         job_id=job_id,
         schema_version=schema_version,

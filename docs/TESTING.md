@@ -24,3 +24,7 @@ The initial test harness uses an in-memory SQLite database through the async SQL
 ## Phase 2 identity coverage
 
 Identity tests cover normalized registration, validation, duplicate email, generic login failures, Argon2-backed login, safe current-user responses, JWT claims, refresh rotation and reuse rejection, logout, API-key high entropy/one-time display/list/revocation/rejection, ambiguous authentication, and reusable admin denial behavior. Migration verification covers clean upgrade and downgrade. Tests use seeded in-memory schema and never call external services.
+
+## Phase 3 durable job-domain coverage
+
+Job-domain tests cover schema validation, legal and illegal state transitions, terminal-state protection, versioned compare-and-set rejection for stale transitions, idempotent replay and payload mismatch, principal scoping, ownership/admin visibility, cancellation requests and lifecycle events, attempt/result uniqueness, and rejection of attempt/result writes outside execution-eligible states. No true concurrent idempotency test is present yet. PostgreSQL concurrency remains an integration check; SQLite tests do not establish PostgreSQL locking behavior.

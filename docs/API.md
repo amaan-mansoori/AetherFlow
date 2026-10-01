@@ -35,27 +35,23 @@ Keys use `afk_<public-id>_<secret>`. The public ID is indexed for lookup; only a
 - `GET /api/v1/jobs/{job_id}/attempts`
 - `GET /api/v1/jobs/{job_id}/events`
 - `POST /api/v1/jobs/{job_id}/cancel`
-- `POST /api/v1/jobs/{job_id}/retry` (only eligible failures)
 
 Submission body conceptually contains `job_type`, `model`, `input`, `configuration`, `priority`, `timeout`, `retry_policy`, `metadata`, and the `Idempotency-Key` header. Responses include job ID, state, timestamps, and links or identifiers for later inspection.
 
 The first workload is a bounded structured inference operation: a typed input object is submitted with an explicit output schema/version selected by `job_type`. The provider adapter returns normalized text/structured content and usage metadata; the domain validates the content against the job type's schema before creating `job_results`. Arbitrary tools, URLs, code, shell commands, and autonomous planning are not part of this contract.
 
-## admin/operations
+## Health
 
-- `GET /api/v1/admin/jobs`
-- `GET /api/v1/admin/workers`
-- `GET /api/v1/admin/queues`
-- `GET /api/v1/admin/audit-logs`
-- `GET /api/v1/admin/metrics`
 - `GET /health/live`
 - `GET /health/ready`
 
-Operational endpoints expose real observed data and enforce admin authorization.
+## Future admin/operations surface
 
-## Phase 2 status
+The following routes are specified for a later phase and are not implemented in the Phase 3 backend: `GET /api/v1/admin/jobs`, `GET /api/v1/admin/workers`, `GET /api/v1/admin/queues`, `GET /api/v1/admin/audit-logs`, and `GET /api/v1/admin/metrics`. When added, operational endpoints must expose real observed data and enforce admin authorization.
 
-Implemented in Phase 2: registration, Argon2 password hashing, JWT access authentication, rotating hashed refresh sessions, logout, current-user retrieval, reusable authentication/admin dependencies, API-key lifecycle, audit persistence, and identity migrations. Jobs, workers, Kafka, Redis, and frontend routes remain deferred.
+## Phase 3 status
+
+Implemented through Phase 3: registration, Argon2 password hashing, JWT access authentication, rotating hashed refresh sessions, logout, current-user retrieval, reusable authentication/admin dependencies, API-key lifecycle, audit persistence, identity migrations, durable job records, explicit versioned state transitions, idempotent submission, ownership/admin visibility, attempts, results, lifecycle events, and cancellation requests. Retry execution, workers, schedulers, Kafka, Redis, providers, distributed dispatch, admin operations routes, and frontend routes remain deferred. A retry action is intentionally deferred until execution and retry infrastructure exists.
 
 ## Contract rules
 

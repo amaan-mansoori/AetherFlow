@@ -10,4 +10,7 @@
 - The mock provider is deterministic and must not be represented as model-quality evidence.
 - Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
 - No performance numbers are known at this phase.
+- Phase 3 persists durable jobs and lifecycle data but does not execute jobs asynchronously. Workers, schedulers, Kafka dispatch, Redis, provider adapters, retry execution, distributed at-least-once processing, frontend, and deployment infrastructure are Phase 4 or later.
+- The retry API action is deferred until retry execution infrastructure exists; retry policy is persisted as job data only.
+- PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
 

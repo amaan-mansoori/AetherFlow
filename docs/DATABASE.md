@@ -20,7 +20,7 @@
 | audit_logs | Security/admin actions | actor, action, target, outcome, redacted metadata, timestamp |
 | idempotency_records | Submission deduplication | principal_id + key unique, fingerprint, job_id, response status, timestamps |
 
-Phase 2 creates `users`, `roles`, `user_roles`, `refresh_sessions`, `api_keys`, and `audit_logs`. The migration seeds exactly `USER` and `ADMIN`. Refresh token values are represented only by SHA-256 hashes; API key secrets are represented only by SHA-256 hashes and an indexed public ID.
+Phase 2 creates `users`, `roles`, `user_roles`, `refresh_sessions`, `api_keys`, and `audit_logs`. Phase 3 adds `jobs`, `idempotency_records`, `job_attempts`, `job_results`, and `job_events`. The migrations seed exactly `USER` and `ADMIN`. Refresh token values are represented only by SHA-256 hashes; API key secrets are represented only by SHA-256 hashes and an indexed public ID.
 
 ## Relationships and lifecycle
 
@@ -34,7 +34,7 @@ Identity-specific indexes are email, role name, refresh token hash, refresh fami
 
 ## Concurrency
 
-State transitions use `UPDATE ... WHERE id = ? AND state = expected AND version = expected`, incrementing version and checking affected rows. Claim operations may use a short row lock/skip-locked query. Idempotency insertion relies on the unique constraint; a conflict reloads and compares the fingerprint. Result insertion is unique by job and occurs only from an eligible state.
+State transitions use `UPDATE ... WHERE id = ? AND state = expected AND version = expected`, incrementing version and checking affected rows. Claim operations may use a short row lock/skip-locked query. Idempotency insertion relies on the unique constraint; a conflict reloads and compares the fingerprint. Attempt insertion requires `RUNNING`; result insertion is unique by job and occurs only from `RUNNING` or `CANCEL_REQUESTED`. Worker claims, retry scheduling, and dispatch are not yet implemented.
 
 ## Migration policy
 

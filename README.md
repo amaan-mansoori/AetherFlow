@@ -2,9 +2,9 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 2 - Identity and Access Foundation**
+> **Current status: Phase 3 - Durable Job Domain Foundation (closed with bounded limitations)**
 
-Phase 2 contains the backend foundation plus multi-user identity and access: registration, Argon2 password hashing, JWT access tokens, rotating hashed refresh sessions, logout, current-user retrieval, `USER`/`ADMIN` role primitives, hash-indexed one-time API keys, audit events, and identity migrations. Jobs, Kafka, Redis, AI providers, workers, frontend, Kubernetes, and production observability are intentionally deferred.
+Phase 3 contains the backend foundation, multi-user identity and access, and the durable job domain: registration, Argon2 password hashing, JWT access tokens, rotating hashed refresh sessions, logout, current-user retrieval, `USER`/`ADMIN` role primitives, hash-indexed one-time API keys, audit events, durable jobs, explicit lifecycle transitions, idempotent submission, ownership boundaries, attempts, results, events, and durable cancellation requests. Kafka, Redis, AI providers, workers, schedulers, frontend, Kubernetes, distributed dispatch, and production observability are intentionally deferred.
 
 ## Local backend setup
 
@@ -37,7 +37,7 @@ alembic upgrade head
 alembic downgrade base
 ```
 
-The Phase 2 identity migration creates users, roles, refresh sessions, API keys, and audit logs and seeds `USER` and `ADMIN`.
+The Phase 2 identity migration creates users, roles, refresh sessions, API keys, and audit logs; the Phase 3 migration adds jobs, idempotency records, attempts, results, and lifecycle events. Migrations seed `USER` and `ADMIN`.
 
 ## Verification
 
