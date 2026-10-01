@@ -52,4 +52,12 @@ This matrix is intentionally a phase-0 contract. Test file names and concrete co
 | Ownership and cancellation | job routes and services | job read/events/attempts/cancel routes | `jobs`, `job_events` | ownership/admin/cancellation tests | API, SECURITY |
 | Attempts and results | `jobs/service.py` | job detail subresources | `job_attempts`, `job_results` | uniqueness and eligibility tests | DATABASE, TESTING |
 
+## Phase 4A implementation mapping
+
+| Requirement | Component | API | Database | Test | Documentation |
+|---|---|---|---|---|---|
+| Execution contract | `jobs/execution.py` | none | existing jobs/results | `test_phase4a.py` | ARCHITECTURE, RELIABILITY |
+| Worker lifecycle | `jobs/worker.py`, existing job services | none | existing jobs, attempts, results, events | success/failure/cancellation/stale-message tests | ARCHITECTURE, RELIABILITY |
+| Dispatch boundary | `jobs/dispatch.py` | future broker boundary | none | local round-trip/dispatch failure tests | ARCHITECTURE, KNOWN-LIMITATIONS |
+
 Worker execution, retry execution, Kafka, Redis, provider integration, admin operations, frontend, and deployment remain future-phase requirements.

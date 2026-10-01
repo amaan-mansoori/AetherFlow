@@ -28,3 +28,12 @@ Identity tests cover normalized registration, validation, duplicate email, gener
 ## Phase 3 durable job-domain coverage
 
 Job-domain tests cover schema validation, legal and illegal state transitions, terminal-state protection, versioned compare-and-set rejection for stale transitions, idempotent replay and payload mismatch, principal scoping, ownership/admin visibility, cancellation requests and lifecycle events, attempt/result uniqueness, and rejection of attempt/result writes outside execution-eligible states. No true concurrent idempotency test is present yet. PostgreSQL concurrency remains an integration check; SQLite tests do not establish PostgreSQL locking behavior.
+
+## Phase 4A execution-foundation coverage
+
+`backend/tests/test_phase4a.py` covers the provider-independent execution
+contract, local dispatcher round trips and failures, worker success, controlled
+and unexpected execution failures, cancellation before execution, attempt/result
+persistence, terminal/ineligible dispatches, and stale-version rejection. These
+tests are deterministic and do not require Kafka or Redis. They do not prove
+PostgreSQL locking, durable broker delivery, or exactly-once execution.

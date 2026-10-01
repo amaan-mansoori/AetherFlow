@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase
+**Status:** Architecture / Specification Phase; Phase 4A contracts implemented
 
 ## Decision summary
 
@@ -21,6 +21,26 @@ AetherFlow starts as a modular monolith with independently runnable API, schedul
 ## Boundaries
 
 Domain services must not import vendor SDK types. API handlers must not implement state-transition rules. Infrastructure adapters own Kafka, Redis, database, and provider details. Shared state changes occur through domain services and transactional repositories.
+
+## Phase 4A execution foundation
+
+Phase 4A introduces broker-neutral contracts in `aetherflow.jobs`:
+
+- `JobExecutor` receives an immutable `ExecutionRequest` and returns a typed
+  `ExecutionOutcome`; it has no FastAPI, Kafka, Redis, or provider dependency.
+- `JobDispatcher` publishes and receives a versioned `DispatchMessage`.
+  `LocalDispatcher` is an in-process development/test adapter only and does not
+  provide durable delivery, consumer-group coordination, or distributed
+  guarantees.
+- `Worker` validates eligibility, claims `ACCEPTED`/`QUEUED` work through the
+  existing state machine and CAS service, records attempts/results, and emits
+  lifecycle events through those same domain services.
+
+The worker commits the claim and attempt before invoking an executor. Execution
+therefore happens outside a database transaction. A later short transaction
+records the attempt outcome and result, then applies the final CAS-protected
+state transition. Stale dispatch messages are rejected. This is a contract and
+local orchestration foundation, not Kafka delivery or exactly-once execution.
 
 ## Data and consistency
 

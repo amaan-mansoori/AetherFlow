@@ -40,3 +40,16 @@ CANCEL_REQUESTED -> FAILED
 - Dependencies failing produce explicit errors or recoverable backlog, not silent success.
 
 Database transactions are short and state changes are compare-and-set guarded. Kafka consumer offsets are committed only after the worker has made the relevant durable decision. Poison messages are isolated and observable.
+
+## Phase 4A failure and delivery model
+
+The Phase 4A worker distinguishes validation, execution, cancellation, and
+unexpected executor failures. Dispatcher failures are surfaced as
+`DispatchFailure`; they are not converted into successful submission. The local
+dispatcher is only a deterministic test adapter.
+
+Submission idempotency remains a durable database guarantee. It is distinct from
+future at-least-once message delivery and from execution deduplication. Phase
+4A does not claim exactly-once processing, retries, backoff, dead-lettering, or
+provider-side cancellation. Those require later broker, scheduler, and provider
+work.
