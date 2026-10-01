@@ -20,3 +20,21 @@ def test_wildcard_cors_is_rejected() -> None:
 def test_logging_level_is_normalized() -> None:
     settings = Settings(database_url="sqlite+aiosqlite:///:memory:", logging_level="debug")
     assert settings.logging_level == "DEBUG"
+
+
+def test_production_requires_kafka_and_secure_cookies() -> None:
+    with pytest.raises(ValidationError):
+        Settings(
+            environment="production",
+            database_url="postgresql+asyncpg://user:pass@localhost/db",
+            jwt_secret_key="x" * 40,
+        )
+
+    settings = Settings(
+        environment="production",
+        database_url="postgresql+asyncpg://user:pass@localhost/db",
+        jwt_secret_key="x" * 40,
+        secure_cookies=True,
+        kafka_enabled=True,
+    )
+    assert settings.database_pool_size == 5

@@ -37,6 +37,11 @@ Identity-specific indexes are email, role name, refresh token hash, refresh fami
 
 State transitions use `UPDATE ... WHERE id = ? AND state = expected AND version = expected`, incrementing version and checking affected rows. Outbox publishers use short lease claims and PostgreSQL `SKIP LOCKED` when multiple publishers are deployed. Retry eligibility is indexed by publication state, future availability, next-attempt timestamp, and creation order. Execution retry intent creation and the `RETRY_SCHEDULED` transition commit atomically. Execution leases are only recoverable after expiry and are cleared by worker decisions. Idempotency insertion relies on the unique constraint; a conflict reloads and compares the fingerprint. Attempt insertion requires `RUNNING`; result insertion is unique by job and occurs only from `RUNNING` or `CANCEL_REQUESTED`. SQLite does not prove PostgreSQL row-lock behavior.
 
+Production startup uses an explicit Alembic migration step before application
+processes. API replicas do not run migrations automatically. PostgreSQL pools
+use bounded size, overflow, pre-ping, and connection recycling settings from
+environment configuration.
+
 ## Migration policy
 
 All schema changes are versioned migrations. Application startup must not silently mutate schema. Migration execution and rollback limitations are documented with deployment procedures.

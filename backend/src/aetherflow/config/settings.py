@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     kafka_client_id: str = "aetherflow"
     kafka_auto_offset_reset: Literal["earliest", "latest"] = "earliest"
     kafka_producer_enable_idempotence: bool = True
+    worker_id: str = Field(default="aetherflow-worker", min_length=1, max_length=128)
+    database_pool_size: int = Field(default=5, ge=1, le=50)
+    database_max_overflow: int = Field(default=10, ge=0, le=100)
+    database_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
     outbox_poll_interval_seconds: float = Field(default=1.0, gt=0, le=300)
     outbox_batch_size: int = Field(default=100, ge=1, le=1000)
     outbox_lease_seconds: int = Field(default=60, ge=1, le=3600)
@@ -78,6 +82,8 @@ class Settings(BaseSettings):
             raise ValueError("jwt_secret_key must contain at least 32 characters")
         if self.environment == "production" and not self.secure_cookies:
             raise ValueError("secure_cookies must be enabled in production")
+        if self.environment == "production" and not self.kafka_enabled:
+            raise ValueError("kafka_enabled must be enabled in production")
         return self
 
 

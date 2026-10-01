@@ -18,12 +18,18 @@ def create_engine(settings: Settings) -> AsyncEngine:
     connect_args: dict[str, object] = {}
     if settings.database_url.startswith("sqlite+aiosqlite://"):
         connect_args["check_same_thread"] = False
-    return create_async_engine(
-        settings.database_url,
-        echo=settings.debug,
-        pool_pre_ping=True,
-        connect_args=connect_args,
-    )
+    engine_options: dict[str, object] = {
+        "echo": settings.debug,
+        "pool_pre_ping": True,
+        "connect_args": connect_args,
+    }
+    if not settings.database_url.startswith("sqlite+aiosqlite://"):
+        engine_options.update(
+            pool_size=settings.database_pool_size,
+            max_overflow=settings.database_max_overflow,
+            pool_recycle=settings.database_pool_recycle_seconds,
+        )
+    return create_async_engine(settings.database_url, **engine_options)
 
 
 def create_session_factory(

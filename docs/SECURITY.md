@@ -34,6 +34,11 @@ The unauthenticated `/metrics` endpoint exposes only bounded operational
 labels and counters. It does not expose job IDs, request IDs, user data,
 paths with identifiers, credentials, authorization headers, or exception text.
 
+The application image runs as a non-root user and excludes `.env` and `.git`
+through `.dockerignore`. Compose secrets are injected through environment
+substitution for local development; production deployments must use external
+secret management and must not reuse the example credentials.
+
 ## Provider configuration
 
 Provider selection uses a non-secret identifier from job configuration or the

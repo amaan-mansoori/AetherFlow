@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 7 - Observability and operations foundation**
+> **Current status: Phase 8 - Production infrastructure and deployment foundation**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -17,6 +17,22 @@ dispatch intents, and cancellation-safe failure recovery. Phase 7 adds
 process-local Prometheus-compatible metrics and dependency-aware health checks.
 External Prometheus storage, dashboards, alerting, Redis, frontend, Kubernetes,
 and external providers remain deferred.
+
+## Local production-like Compose stack
+
+Copy `.env.example` to `.env`, replace `POSTGRES_PASSWORD` and
+`AETHERFLOW_JWT_SECRET_KEY`, then run:
+
+```powershell
+docker compose up --build
+```
+
+Compose starts PostgreSQL and KRaft Kafka, runs `alembic upgrade head` once,
+then starts the API, worker, and outbox publisher. Verify `GET /health/live`,
+`GET /health/ready`, and `GET /metrics`. Use `docker compose logs -f api worker
+outbox-publisher` to inspect processes and `docker compose down` to stop them.
+Use `docker compose down -v` only when intentionally deleting local data.
+The Compose credentials are local-development values, not production secrets.
 
 ## Local backend setup
 

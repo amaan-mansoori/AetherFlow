@@ -16,6 +16,10 @@
   resumption after a process crash.
 - Phase 7 metrics are process-local and reset on restart. External scraping,
   dashboards, alerting, and durable telemetry storage are not included.
+- Phase 8 provides a local Compose deployment foundation only. Docker Compose
+  credentials are not production secret management; Kubernetes, cloud
+  deployment, backups, broker/database HA, and external smoke verification are
+  deferred.
 - PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
 - Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Scheduler coordination, execution deduplication, retries, dead letters, and production worker deployment remain deferred.
 - Phase 4B introduced the Kafka adapter; Phase 4C moved publication behind the

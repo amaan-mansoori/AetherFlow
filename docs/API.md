@@ -46,6 +46,10 @@ The first workload is a bounded structured inference operation: a typed input ob
 - `GET /health/ready`
 - `GET /metrics` returns unauthenticated Prometheus-compatible application metrics.
 
+In the Compose deployment, API readiness represents PostgreSQL availability.
+Kafka readiness is enforced for the worker and outbox publisher process
+startup, not by API liveness.
+
 ## Future admin/operations surface
 
 The following routes are specified for a later phase and are not implemented in the Phase 3 backend: `GET /api/v1/admin/jobs`, `GET /api/v1/admin/workers`, `GET /api/v1/admin/queues`, `GET /api/v1/admin/audit-logs`, and `GET /api/v1/admin/metrics`. When added, operational endpoints must expose real observed data and enforce admin authorization.

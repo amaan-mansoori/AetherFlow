@@ -27,6 +27,7 @@
 | Database readiness | async SQLAlchemy session infrastructure | `/health/ready` | PostgreSQL connection | `backend/tests/test_app.py`, `test_database.py`; PostgreSQL integration check | DATABASE, RELIABILITY |
 | Request IDs/log context | request middleware and observability context | response `X-Request-ID` | none | `backend/tests/test_app.py` | OBSERVABILITY, SECURITY |
 | Application metrics | metrics registry, HTTP middleware, and domain hooks | `/metrics` | none | `backend/tests/test_phase7_observability.py` | ADR-0016, development log 013 |
+| Production process topology | Dockerfile, Compose, worker/outbox entrypoints | API, worker, publisher services | PostgreSQL/Kafka runtime | `test_config.py`, runtime tests | ADR-0017, development log 014, README |
 | Error contract | centralized API handlers | all current HTTP errors | none | `backend/tests/test_app.py` | API-ERRORS |
 
 ## Phase 2 implementation mapping

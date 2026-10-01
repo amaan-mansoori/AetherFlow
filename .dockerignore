@@ -1,0 +1,15 @@
+.git
+.env
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+backend/.pytest_cache
+backend/.ruff_cache
+backend/migrations/versions/__pycache__
+node_modules
+README.md
+docs
+ai-development-log
