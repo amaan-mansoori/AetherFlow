@@ -133,6 +133,10 @@ _COUNTERS = {
     "aetherflow_provider_executions_total": ("Provider executions.", ("provider",)),
     "aetherflow_provider_successes_total": ("Provider successes.", ("provider",)),
     "aetherflow_provider_failures_total": ("Provider failures.", ("provider", "failure_category")),
+    "aetherflow_redis_errors_total": ("Redis operation errors.", ("operation",)),
+    "aetherflow_rate_limit_bypasses_total": ("Redis rate-limit bypasses.", ("rate_class",)),
+    "aetherflow_rate_limit_requests_total": ("Rate-limited requests accepted.", ("rate_class",)),
+    "aetherflow_rate_limit_blocked_total": ("Rate-limited requests blocked.", ("rate_class",)),
 }
 for _name, (_help, _labels) in _COUNTERS.items():
     METRICS.counter(_name, _help, _labels)
@@ -145,5 +149,6 @@ for _name, _help, _labels in (
         "Provider execution duration.",
         ("provider",),
     ),
+    ("aetherflow_redis_operation_duration_seconds", "Redis operation duration.", ("operation",)),
 ):
     METRICS.histogram(_name, _help, _labels)

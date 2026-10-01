@@ -10,7 +10,7 @@
 - The mock provider is deterministic and must not be represented as model-quality evidence.
 - Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
 - No performance numbers are known at this phase.
-- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, Redis, frontend, and cloud deployment remain deferred.
+- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, frontend, and cloud deployment remain deferred.
 - Phase 6 adds durable execution retry for bounded retryable provider failures;
   there is still no retry API action, operator replay workflow, or provider-call
   resumption after a process crash.
@@ -42,3 +42,8 @@
   unavailable. PostgreSQL/Kafka Compose startup, API-to-result E2E, runtime
   restart recovery, infrastructure concurrency, and shutdown observation are
   therefore **UNVERIFIED**, not successful production validation.
+- Phase 11 rate limiting is fixed-window and process-independent only when
+  Redis is available. It intentionally fails open during Redis outages, so
+  request limits are not enforced during that degraded interval. Real Redis
+  startup and cross-process sharing remain **UNVERIFIED** when Docker is
+  unavailable.

@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 10 - Production validation and reliability verification**
+> **Current status: Phase 11 - Redis coordination and distributed rate limiting**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -11,8 +11,9 @@ backoff. Phase 4F adds worker execution leases and deterministic stale-execution
 recovery. Phase 5 adds a provider registry, deterministic mock provider,
 normalized provider failures, and worker-enforced execution timeouts. Kafka is
 not required for deterministic unit tests and is not claimed as locally
-verified unless a broker is available. Real external providers, execution
-Phase 6 adds deterministic bounded execution retry, durable future retry
+verified unless a broker is available. Real external provider validation remains
+environment-dependent. Phase 6 adds deterministic bounded execution retry,
+durable future retry
 dispatch intents, and cancellation-safe failure recovery. Phase 7 adds
 process-local Prometheus-compatible metrics and dependency-aware health checks.
 Phase 9 adds an isolated OpenAI-compatible provider adapter. Phase 10 validates
@@ -22,6 +23,10 @@ default and no provider credential is stored in jobs, Kafka, logs, metrics, or
 API responses. In the current environment Docker's Linux engine is unavailable,
 so PostgreSQL/Kafka/Compose E2E and real-provider smoke validation are
 unverified.
+Phase 11 adds optional Redis-backed distributed API rate limiting. PostgreSQL
+remains the durable source of truth, Kafka remains asynchronous transport, and
+Redis is ephemeral coordination only. Rate limiting is fail-open when Redis is
+unavailable.
 
 ## Local production-like Compose stack
 
@@ -32,7 +37,8 @@ Copy `.env.example` to `.env`, replace `POSTGRES_PASSWORD` and
 docker compose up --build
 ```
 
-Compose starts PostgreSQL and KRaft Kafka, runs `alembic upgrade head` once,
+Compose starts PostgreSQL, KRaft Kafka, and internal Redis, runs
+`alembic upgrade head` once,
 then starts the API, worker, and outbox publisher. Verify `GET /health/live`,
 `GET /health/ready`, and `GET /metrics`. Use `docker compose logs -f api worker
 outbox-publisher` to inspect processes and `docker compose down` to stop them.
@@ -59,6 +65,10 @@ The Compose credentials are local-development values, not production secrets.
 
 5. Check `GET /health/live` and `GET /health/ready`.
 6. Scrape `GET /metrics` for bounded-label application metrics.
+
+Redis rate limiting is disabled by default for local backend runs. Set
+`AETHERFLOW_REDIS_ENABLED=true` and configure `AETHERFLOW_REDIS_URL` to enable
+the `auth` and `api` fixed-window classes.
 
 Identity routes are available under `/api/v1/auth`. Login returns a short-lived access token and sets the refresh cookie. API keys are managed under `/api/v1/api-keys`; the raw key secret is shown only in the creation response.
 

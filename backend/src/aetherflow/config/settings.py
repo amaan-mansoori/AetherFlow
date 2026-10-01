@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     provider_openai_base_url: str = "https://api.openai.com/v1"
     provider_openai_max_connections: int = Field(default=10, ge=1, le=100)
     provider_openai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
+    redis_enabled: bool = False
+    redis_url: str = "redis://localhost:6379/0"
+    redis_max_connections: int = Field(default=10, ge=1, le=100)
+    redis_connect_timeout_seconds: float = Field(default=1.0, gt=0, le=30)
+    redis_socket_timeout_seconds: float = Field(default=1.0, gt=0, le=30)
+    rate_limit_auth_requests: int = Field(default=20, ge=1, le=10000)
+    rate_limit_api_requests: int = Field(default=120, ge=1, le=10000)
+    rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
 
     @field_validator("logging_level")
     @classmethod
@@ -79,6 +87,14 @@ class Settings(BaseSettings):
         normalized = value.strip().rstrip("/")
         if not normalized.startswith(("http://", "https://")):
             raise ValueError("provider_openai_base_url must be an HTTP(S) URL")
+        return normalized
+
+    @field_validator("redis_url")
+    @classmethod
+    def validate_redis_url(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized.startswith(("redis://", "rediss://")):
+            raise ValueError("redis_url must be a redis:// or rediss:// URL")
         return normalized
 
     @field_validator("cors_origins")

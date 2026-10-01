@@ -134,3 +134,13 @@ and Kafka integration/concurrency remain environment-gated.
 | PostgreSQL/Kafka/Compose E2E | Docker Linux engine unavailable | UNVERIFIED |
 | Real provider smoke | No credential supplied | UNVERIFIED |
 | Infrastructure concurrency/restart/shutdown | Requires PostgreSQL and Kafka runtime | UNVERIFIED |
+
+## Phase 11 implementation mapping
+
+| Requirement | Component | Deterministic evidence | Status |
+|---|---|---|---|
+| Lifecycle-safe Redis boundary | `infrastructure/redis.py`, API lifespan | injected store and settings checks | VERIFIED |
+| Atomic bounded rate limiting | `observability/rate_limit.py` | fixed-window decision tests | VERIFIED |
+| Fail-open outage policy | rate-limit middleware and metrics | unavailable-store test | VERIFIED |
+| Redis Compose service | `docker-compose.yml` | `docker compose config` | VERIFIED |
+| Real Redis and multi-process sharing | Docker integration | Docker engine unavailable | UNVERIFIED |

@@ -61,6 +61,11 @@ application configuration. Compose uses environment substitution and does not
 contain a real credential. Infrastructure log validation is **UNVERIFIED**
 because the Docker runtime could not be started.
 
+Redis URLs are environment configuration and are never logged. Rate-limit keys
+contain only a fixed namespace, class, and truncated digest of an opaque
+identity. Raw API keys, JWTs, refresh tokens, provider credentials, and request
+headers are not stored in Redis. Redis has no public Compose port.
+
 ## Supply chain and containers
 
 Pin and review dependencies, scan dependencies and images in CI where practical, use minimal non-root images, read-only filesystems where feasible, drop Linux capabilities, and avoid privileged containers.

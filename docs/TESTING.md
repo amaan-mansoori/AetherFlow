@@ -106,3 +106,12 @@ API-to-result E2E checks are run only when Docker is available; they are not
 substituted with SQLite or fake clients. Docker's Linux engine was unavailable
 in the current environment, so these checks are **UNVERIFIED**. Real-provider
 smoke testing is also **UNVERIFIED** because no credential was supplied.
+
+## Phase 11 Redis coverage
+
+Deterministic tests inject a fake async Redis boundary and verify the atomic
+fixed-window result contract, bounded TTL inputs, class separation, safe
+public-ID key construction, 429 and `Retry-After` behavior, and fail-open
+operation during Redis timeout. They do not claim a real Redis server or
+cross-process behavior. Real Redis integration remains opt-in and separate
+from the ordinary suite.

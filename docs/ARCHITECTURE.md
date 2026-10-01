@@ -219,3 +219,18 @@ Phase 10 does not change this architecture. Docker's Linux engine was
 unavailable during validation, so the PostgreSQL/Kafka runtime path and
 Compose E2E are **UNVERIFIED**. Existing SQLite/fake-client tests remain
 deterministic component verification only.
+
+## Phase 11 responsibility split
+
+The storage and transport boundaries are explicit:
+
+```text
+PostgreSQL = durable source of truth
+Kafka      = asynchronous transport
+Redis      = ephemeral coordination and API rate limiting
+```
+
+Redis is created only in the API application lifecycle when explicitly
+enabled. A bounded pooled async client executes one atomic Lua fixed-window
+increment with a TTL. The worker and outbox publisher do not receive Redis
+configuration because their correctness does not depend on it.

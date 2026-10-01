@@ -149,3 +149,12 @@ retry scheduling, lease recovery, cancellation, and resource shutdown. Real
 PostgreSQL row-locking, Kafka offset/restart behavior, concurrent publisher
 claims, and the complete Compose path are **UNVERIFIED** because Docker's
 Linux engine was unavailable. No exactly-once claim is made.
+
+## Phase 11 Redis outage policy
+
+API rate limiting is non-critical coordination and is **fail-open**. A Redis
+timeout or unavailable server bypasses the limit, increments bounded
+operational metrics, and emits a rate-limited warning. Authentication,
+PostgreSQL job durability, transactional outbox publication, worker execution,
+and durable retry behavior do not call Redis and therefore continue to use
+their existing authoritative systems.
