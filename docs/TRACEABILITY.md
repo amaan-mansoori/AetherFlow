@@ -26,6 +26,7 @@
 | Foundation startup/configuration | `backend/src/aetherflow/main.py`, config | `/health/live` | none | `backend/tests/test_app.py`, `test_config.py` | README, DEPLOYMENT |
 | Database readiness | async SQLAlchemy session infrastructure | `/health/ready` | PostgreSQL connection | `backend/tests/test_app.py`, `test_database.py`; PostgreSQL integration check | DATABASE, RELIABILITY |
 | Request IDs/log context | request middleware and observability context | response `X-Request-ID` | none | `backend/tests/test_app.py` | OBSERVABILITY, SECURITY |
+| Application metrics | metrics registry, HTTP middleware, and domain hooks | `/metrics` | none | `backend/tests/test_phase7_observability.py` | ADR-0016, development log 013 |
 | Error contract | centralized API handlers | all current HTTP errors | none | `backend/tests/test_app.py` | API-ERRORS |
 
 ## Phase 2 implementation mapping

@@ -44,6 +44,7 @@ The first workload is a bounded structured inference operation: a typed input ob
 
 - `GET /health/live`
 - `GET /health/ready`
+- `GET /metrics` returns unauthenticated Prometheus-compatible application metrics.
 
 ## Future admin/operations surface
 

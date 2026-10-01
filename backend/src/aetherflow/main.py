@@ -20,6 +20,7 @@ from aetherflow.api.router import router
 from aetherflow.config.logging import configure_logging
 from aetherflow.config.settings import Settings, get_settings
 from aetherflow.infrastructure.database.session import create_engine, create_session_factory
+from aetherflow.observability.middleware import MetricsMiddleware
 from aetherflow.observability.request_id import RequestIdMiddleware
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(MetricsMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origins,

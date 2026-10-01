@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from time import perf_counter
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -29,6 +30,7 @@ from aetherflow.jobs.service import (
     transition_job_state,
 )
 from aetherflow.jobs.state_machine import is_terminal_state
+from aetherflow.observability.metrics import METRICS
 
 
 class WorkerResultStatus(StrEnum):
@@ -80,6 +82,7 @@ class Worker:
         if job is None:
             raise ApiError("NOT_FOUND", "Job not found.", 404)
         if is_terminal_state(job.state):
+            METRICS.inc("aetherflow_worker_stale_messages_total", job_type=job.type)
             return WorkerResult(message.job_id, WorkerResultStatus.INELIGIBLE)
 
         if job.state == JobState.CANCEL_REQUESTED:
@@ -105,6 +108,7 @@ class Worker:
                 return await self._recover_stale_execution(session, job)
             return WorkerResult(message.job_id, WorkerResultStatus.INELIGIBLE)
         if message.job_version != job.version:
+            METRICS.inc("aetherflow_worker_stale_messages_total", job_type=job.type)
             return WorkerResult(message.job_id, WorkerResultStatus.INELIGIBLE)
 
         if job.state == JobState.ACCEPTED:
@@ -158,6 +162,7 @@ class Worker:
             metadata=job.metadata_,
         )
 
+        started = perf_counter()
         try:
             outcome = await asyncio.wait_for(
                 self._executor.execute(request),
@@ -229,6 +234,12 @@ class Worker:
             payload={"reason": "execution_succeeded"},
             expected_version=current.version,
         )
+        METRICS.inc("aetherflow_worker_executions_succeeded_total", job_type=job.type)
+        METRICS.observe(
+            "aetherflow_worker_execution_duration_seconds",
+            perf_counter() - started,
+            job_type=job.type,
+        )
         return WorkerResult(message.job_id, WorkerResultStatus.SUCCEEDED, attempt_number)
 
     async def _finalize_failure(
@@ -257,6 +268,17 @@ class Worker:
             retry_at=retry_at,
             actor=self._worker_id,
         )
+        METRICS.inc(
+            "aetherflow_worker_executions_failed_total",
+            job_type=job.type,
+            failure_category=failure.kind.value,
+        )
+        if decision == ExecutionRetryDecision.RETRY:
+            METRICS.inc(
+                "aetherflow_worker_executions_retried_total",
+                job_type=job.type,
+                failure_category=failure.kind.value,
+            )
         return (
             WorkerResultStatus.RETRY_SCHEDULED
             if decision == ExecutionRetryDecision.RETRY

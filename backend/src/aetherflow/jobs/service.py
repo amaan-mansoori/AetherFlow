@@ -25,6 +25,7 @@ from aetherflow.infrastructure.database.models import (
 from aetherflow.jobs.idempotency import compute_payload_fingerprint
 from aetherflow.jobs.schemas import JobCreateRequest
 from aetherflow.jobs.state_machine import is_terminal_state, validate_transition
+from aetherflow.observability.metrics import METRICS
 
 
 async def is_admin_user(session: AsyncSession, user: User) -> bool:
@@ -143,7 +144,8 @@ async def submit_job(
         if resolved_job is None:
             raise ApiError("NOT_FOUND", "Job not found.", 404) from exc
         return resolved_job, False
-
+    METRICS.inc("aetherflow_jobs_created_total", job_type=job.type)
+    METRICS.inc("aetherflow_outbox_records_created_total")
     await session.refresh(job)
     return job, True
 
@@ -283,6 +285,13 @@ async def transition_job_state(
         payload=payload or {},
     )
     session.add(event)
+    METRICS.inc(
+        "aetherflow_job_state_transitions_total",
+        from_state=str(prior_state or "NONE"),
+        to_state=str(target_state),
+    )
+    if target_state == JobState.CANCELLED:
+        METRICS.inc("aetherflow_jobs_cancelled_total", job_type=job.type)
     await session.commit()
     await session.refresh(job)
     return job
@@ -328,6 +337,7 @@ async def record_job_attempt(
         trace_id=trace_id,
     )
     session.add(attempt)
+    METRICS.inc("aetherflow_worker_executions_started_total", job_type=job.type)
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -427,6 +437,15 @@ async def finalize_execution_failure(
                 schema_version="v1",
             )
         )
+        METRICS.inc("aetherflow_retries_scheduled_total", failure_category=failure_kind)
+        METRICS.observe(
+            "aetherflow_retry_delay_seconds",
+            max(0.0, (retry_at - now).total_seconds()),
+            failure_category=failure_kind,
+        )
+    else:
+        METRICS.inc("aetherflow_retries_exhausted_total", failure_category=failure_kind)
+    METRICS.inc("aetherflow_jobs_failed_total", job_type=job.type, failure_category=failure_kind)
     await session.commit()
     await session.refresh(job)
     return job
@@ -468,6 +487,7 @@ async def record_job_result(
             409,
         ) from exc
     await session.refresh(result)
+    METRICS.inc("aetherflow_jobs_completed_total", job_type=job.type)
     return result
 
 

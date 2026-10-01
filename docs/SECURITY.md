@@ -30,6 +30,10 @@ Redact authorization headers, API keys, passwords, provider credentials, raw pro
 
 Security audit events cover registration, successful/failed login, refresh creation/rotation/reuse failure, logout, API-key creation/revocation, and authorization denial. Audit context contains only safe metadata such as public key ID and reason.
 
+The unauthenticated `/metrics` endpoint exposes only bounded operational
+labels and counters. It does not expose job IDs, request IDs, user data,
+paths with identifiers, credentials, authorization headers, or exception text.
+
 ## Provider configuration
 
 Provider selection uses a non-secret identifier from job configuration or the

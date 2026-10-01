@@ -2,13 +2,14 @@
 
 import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aetherflow.api.dependencies import get_request_db_session
 from aetherflow.api.errors import ApiError
+from aetherflow.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -38,3 +39,10 @@ async def readiness(
             503,
         ) from exc
     return {"status": "ready", "database": "ready"}
+
+
+@router.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    """Expose application metrics in Prometheus text format."""
+
+    return Response(METRICS.render(), media_type="text/plain; version=0.0.4")

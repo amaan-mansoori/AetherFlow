@@ -84,3 +84,9 @@ numbering, permanent failure, retry exhaustion, future eligibility,
 cancellation before publication, duplicate retry delivery, and stale-state
 protection. SQLite and local dispatch provide deterministic behavior but do
 not prove PostgreSQL `FOR UPDATE SKIP LOCKED` or Kafka consumer concurrency.
+
+## Phase 7 observability coverage
+
+Tests verify Prometheus exposition, HTTP status classes and normalized routes,
+bounded metric labels, and distinct liveness/readiness behavior. They do not
+claim external Prometheus scraping or infrastructure-level telemetry.

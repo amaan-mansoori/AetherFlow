@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Mapping
+from time import perf_counter
 from typing import Protocol
 
 from aetherflow.config.settings import Settings
@@ -12,6 +13,7 @@ from aetherflow.jobs.execution import (
     ExecutionRequest,
     JobExecutor,
 )
+from aetherflow.observability.metrics import METRICS
 
 
 class ProviderAdapter(Protocol):
@@ -79,15 +81,37 @@ class ProviderExecutor(JobExecutor):
             )
         provider = configured_provider.strip()
         adapter = self._registry.resolve(provider, request.model)
+        started = perf_counter()
+        METRICS.inc("aetherflow_provider_executions_total", provider=provider)
         try:
             outcome = await adapter.execute(request)
         except ExecutionFailure as exc:
+            METRICS.inc(
+                "aetherflow_provider_failures_total",
+                provider=provider,
+                failure_category=exc.kind.value,
+            )
+            METRICS.observe(
+                "aetherflow_provider_execution_duration_seconds",
+                perf_counter() - started,
+                provider=provider,
+            )
             if exc.provider is None:
                 raise ExecutionFailure(exc.kind, exc.message, provider=provider) from exc
             raise
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            METRICS.inc(
+                "aetherflow_provider_failures_total",
+                provider=provider,
+                failure_category=ExecutionFailureKind.TRANSIENT_PROVIDER.value,
+            )
+            METRICS.observe(
+                "aetherflow_provider_execution_duration_seconds",
+                perf_counter() - started,
+                provider=provider,
+            )
             raise ExecutionFailure(
                 ExecutionFailureKind.TRANSIENT_PROVIDER,
                 "Provider execution failed.",
@@ -99,6 +123,16 @@ class ProviderExecutor(JobExecutor):
             or not isinstance(outcome.schema_version, str)
             or not outcome.schema_version.strip()
         ):
+            METRICS.inc(
+                "aetherflow_provider_failures_total",
+                provider=provider,
+                failure_category=ExecutionFailureKind.VALIDATION.value,
+            )
+            METRICS.observe(
+                "aetherflow_provider_execution_duration_seconds",
+                perf_counter() - started,
+                provider=provider,
+            )
             raise ExecutionFailure(
                 ExecutionFailureKind.VALIDATION,
                 "Provider returned an invalid normalized outcome.",
@@ -110,6 +144,12 @@ class ProviderExecutor(JobExecutor):
                 "Provider returned invalid usage metadata.",
                 provider=provider,
             )
+        METRICS.inc("aetherflow_provider_successes_total", provider=provider)
+        METRICS.observe(
+            "aetherflow_provider_execution_duration_seconds",
+            perf_counter() - started,
+            provider=provider,
+        )
         return (
             outcome
             if outcome.provider == provider

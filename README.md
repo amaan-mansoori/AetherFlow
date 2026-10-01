@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 6 - Durable execution retry and failure recovery**
+> **Current status: Phase 7 - Observability and operations foundation**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -13,9 +13,10 @@ normalized provider failures, and worker-enforced execution timeouts. Kafka is
 not required for deterministic unit tests and is not claimed as locally
 verified unless a broker is available. Real external providers, execution
 Phase 6 adds deterministic bounded execution retry, durable future retry
-dispatch intents, and cancellation-safe failure recovery. Redis, a general
-scheduler, frontend, Kubernetes, external providers, and production
-observability remain deferred.
+dispatch intents, and cancellation-safe failure recovery. Phase 7 adds
+process-local Prometheus-compatible metrics and dependency-aware health checks.
+External Prometheus storage, dashboards, alerting, Redis, frontend, Kubernetes,
+and external providers remain deferred.
 
 ## Local backend setup
 
@@ -36,6 +37,7 @@ observability remain deferred.
    ```
 
 5. Check `GET /health/live` and `GET /health/ready`.
+6. Scrape `GET /metrics` for bounded-label application metrics.
 
 Identity routes are available under `/api/v1/auth`. Login returns a short-lived access token and sets the refresh cookie. API keys are managed under `/api/v1/api-keys`; the raw key secret is shown only in the creation response.
 

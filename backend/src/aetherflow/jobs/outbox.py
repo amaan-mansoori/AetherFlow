@@ -19,6 +19,7 @@ from aetherflow.jobs.dispatch import (
     TransientDispatchFailure,
 )
 from aetherflow.jobs.retry import FailureCategory, RetryPolicy
+from aetherflow.observability.metrics import METRICS
 
 
 @dataclass(frozen=True)
@@ -56,10 +57,15 @@ class OutboxPublisher:
         claimed = await self._claim_one()
         if claimed is None:
             return None
+        METRICS.inc("aetherflow_outbox_publish_attempts_total")
         if claimed.message_type != "JOB_DISPATCH" or claimed.schema_version != "v1":
             error = "Unsupported outbox dispatch type or schema."
             await self._record_failure(
                 claimed.id, error, FailureCategory.PERMANENT_DISPATCH, terminal=True
+            )
+            METRICS.inc(
+                "aetherflow_outbox_publications_failed_total",
+                failure_category=FailureCategory.PERMANENT_DISPATCH.value,
             )
             raise PermanentDispatchFailure(error)
         message = DispatchMessage(
@@ -87,6 +93,7 @@ class OutboxPublisher:
                 raise
             raise TransientDispatchFailure("Outbox dispatch failed.") from exc
         await self._mark_published(claimed.id)
+        METRICS.inc("aetherflow_outbox_publications_succeeded_total")
         return OutboxPublication(claimed.id, claimed.job_id, True)
 
     async def publish_available(self, limit: int = 100) -> list[OutboxPublication]:
