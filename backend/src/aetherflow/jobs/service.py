@@ -47,7 +47,7 @@ async def submit_job(
     Returns:
         tuple[Job, bool]: (job, is_newly_created)
     """
-    fingerprint = compute_payload_fingerprint(payload.model_dump())
+    fingerprint = compute_payload_fingerprint(payload.model_dump(mode="json"))
 
     # Fast path: check for existing idempotency record
     existing_record = await session.scalar(
@@ -85,6 +85,7 @@ async def submit_job(
         metadata_=payload.metadata,
         state=JobState.ACCEPTED,
         version=1,
+        schedule_at=payload.schedule_at,
     )
     session.add(job)
     await session.flush()
@@ -107,15 +108,16 @@ async def submit_job(
         response_status=201,
     )
     session.add(record)
-    session.add(
-        OutboxDispatch(
-            job_id=job.id,
-            job_version=job.version,
-            enqueued_at=job.created_at,
-            message_type="JOB_DISPATCH",
-            schema_version="v1",
+    if payload.schedule_at is None or payload.schedule_at <= utc_now():
+        session.add(
+            OutboxDispatch(
+                job_id=job.id,
+                job_version=job.version,
+                enqueued_at=job.created_at,
+                message_type="JOB_DISPATCH",
+                schema_version="v1",
+            )
         )
-    )
 
     try:
         await session.commit()
@@ -145,7 +147,10 @@ async def submit_job(
             raise ApiError("NOT_FOUND", "Job not found.", 404) from exc
         return resolved_job, False
     METRICS.inc("aetherflow_jobs_created_total", job_type=job.type)
-    METRICS.inc("aetherflow_outbox_records_created_total")
+    if payload.schedule_at is None or payload.schedule_at <= utc_now():
+        METRICS.inc("aetherflow_outbox_records_created_total")
+    if payload.schedule_at is not None:
+        METRICS.inc("aetherflow_scheduled_jobs_created_total")
     await session.refresh(job)
     return job, True
 

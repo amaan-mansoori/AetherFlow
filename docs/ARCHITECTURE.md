@@ -196,11 +196,11 @@ duplicates and out-of-order events; PostgreSQL remains authoritative.
 
 ## Redis contract
 
-Keys use namespaced, versioned formats such as `aetherflow:v1:ratelimit:user:{id}:{window}` and `aetherflow:v1:cache:job:{id}`. Rate-limit keys expire at the window boundary. Cache entries have short configurable TTLs, are invalidated on job mutation where practical, and are never used to authorize access. Redis unavailability follows feature policy: rate limiting fails closed for abuse-sensitive submission routes unless an explicitly configured degraded mode is selected; cache reads miss and durable reads continue; durable mutations never depend on Redis.
+Keys use namespaced, versioned formats such as `aetherflow:v1:ratelimit:user:{id}:{window}` and `aetherflow:v1:cache:job:{id}`. Rate-limit keys expire at the window boundary. Cache entries have short configurable TTLs, are invalidated on job mutation where practical, and are never used to authorize access. Redis unavailability follows the Phase 11 non-critical rate-limit policy: rate limiting fails open, cache reads miss, durable reads continue, and durable mutations never depend on Redis.
 
 ## Scaling
 
-API replicas scale on request load; worker replicas scale by Kafka consumer-group partition capacity and queue lag; scheduler instances use a lease/leader mechanism if independently deployed. PostgreSQL remains the bottleneck to measure, not hide. No service split is justified until independent scaling, failure isolation, or ownership requires it.
+API replicas scale on request load; worker replicas scale by Kafka consumer-group partition capacity and queue lag; scheduler instances use PostgreSQL row locking and bounded polling rather than a Redis leader. PostgreSQL remains the bottleneck to measure, not hide. No service split is justified until independent scaling, failure isolation, or ownership requires it.
 
 ## Deployment
 
@@ -234,3 +234,25 @@ Redis is created only in the API application lifecycle when explicitly
 enabled. A bounded pooled async client executes one atomic Lua fixed-window
 increment with a TTL. The worker and outbox publisher do not receive Redis
 configuration because their correctness does not depend on it.
+
+## Phase 12 durable one-shot scheduling
+
+`jobs.schedule_at` is nullable UTC metadata. Immediate submissions and
+past-due schedules create the same initial outbox intent as before. A future
+schedule remains `ACCEPTED` and has no Kafka-facing intent until due. The
+independent scheduler polls a bounded indexed query and, in a short
+PostgreSQL transaction, locks one due `ACCEPTED` row with `SKIP LOCKED`,
+applies `ACCEPTED -> QUEUED` through the versioned CAS state machine, records
+`SCHEDULED_JOB_ACTIVATED`, and inserts the versioned outbox intent.
+
+The scheduler never connects to Kafka or Redis. The outbox publisher remains
+the only publication bridge. A crash before commit rolls back activation; a
+crash after commit leaves the outbox intent recoverable. Concurrent schedulers
+are protected by row locking, CAS, and the unique `(job_id, job_version)`
+outbox index. SQLite tests cover deterministic behavior but not PostgreSQL
+locking.
+
+Initial scheduling is distinct from execution retry: retry intents remain
+`RETRY_SCHEDULED` with `available_at` and continue to be handled by the
+existing outbox publisher. Cancellation of a future `ACCEPTED` job wins by
+the existing CAS transition, and the scheduler only selects `ACCEPTED` rows.

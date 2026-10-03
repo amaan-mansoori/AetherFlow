@@ -137,5 +137,21 @@ services:
       kafka:
         condition: service_healthy
 
+  scheduler:
+    build: .
+    command: ["python", "-m", "aetherflow.runtime.scheduler"]
+    environment:
+      AETHERFLOW_ENVIRONMENT: production
+      AETHERFLOW_DATABASE_URL: postgresql+asyncpg://aetherflow:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/aetherflow
+      AETHERFLOW_JWT_SECRET_KEY: ${AETHERFLOW_JWT_SECRET_KEY:?Set AETHERFLOW_JWT_SECRET_KEY in .env}
+      AETHERFLOW_SECURE_COOKIES: "true"
+      AETHERFLOW_SCHEDULER_ENABLED: "true"
+      AETHERFLOW_SCHEDULER_POLL_INTERVAL_SECONDS: ${AETHERFLOW_SCHEDULER_POLL_INTERVAL_SECONDS:-1}
+      AETHERFLOW_SCHEDULER_BATCH_SIZE: ${AETHERFLOW_SCHEDULER_BATCH_SIZE:-100}
+      AETHERFLOW_SCHEDULER_ID: ${AETHERFLOW_SCHEDULER_ID:-compose-scheduler}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   postgres-data:

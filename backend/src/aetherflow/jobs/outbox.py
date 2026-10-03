@@ -138,7 +138,7 @@ class OutboxPublisher:
                             OutboxDispatch.available_at.is_(None)
                             & (
                                 (
-                                    (Job.state == JobState.ACCEPTED)
+                                    (Job.state.in_({JobState.ACCEPTED, JobState.QUEUED}))
                                     & (Job.version == OutboxDispatch.job_version)
                                 )
                                 | (Job.state == JobState.CANCEL_REQUESTED)

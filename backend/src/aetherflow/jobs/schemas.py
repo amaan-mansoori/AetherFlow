@@ -1,6 +1,6 @@
 """Job schemas for validation and API responses."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -30,6 +30,7 @@ class JobCreateRequest(BaseModel):
     timeout_seconds: int = Field(default=300, ge=5, le=3600)
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    schedule_at: datetime | None = None
 
     @field_validator("type", "model")
     @classmethod
@@ -37,6 +38,15 @@ class JobCreateRequest(BaseModel):
         if not value.strip():
             raise ValueError("field must not be blank")
         return value.strip()
+
+    @field_validator("schedule_at")
+    @classmethod
+    def normalize_schedule_at(cls, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("schedule_at must include a timezone")
+        return value.astimezone(UTC)
 
     @field_validator("configuration")
     @classmethod
@@ -113,6 +123,14 @@ class JobResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    schedule_at: datetime | None = None
+
+    @field_validator("schedule_at", mode="before")
+    @classmethod
+    def ensure_schedule_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            return value.replace(tzinfo=UTC)
+        return value
 
 
 class JobDetailResponse(JobResponse):

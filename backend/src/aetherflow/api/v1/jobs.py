@@ -45,6 +45,7 @@ def _to_job_detail(job: Job) -> dict[str, Any]:
         "version": job.version,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
+        "schedule_at": job.schedule_at,
         "input": job.input,
         "configuration": job.configuration,
         "retry_policy": job.retry_policy,
@@ -66,6 +67,7 @@ def _to_job_summary(job: Job) -> dict[str, Any]:
         "version": job.version,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
+        "schedule_at": job.schedule_at,
     }
 
 

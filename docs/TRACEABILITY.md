@@ -144,3 +144,13 @@ and Kafka integration/concurrency remain environment-gated.
 | Fail-open outage policy | rate-limit middleware and metrics | unavailable-store test | VERIFIED |
 | Redis Compose service | `docker-compose.yml` | `docker compose config` | VERIFIED |
 | Real Redis and multi-process sharing | Docker integration | Docker engine unavailable | UNVERIFIED |
+
+## Phase 12 implementation mapping
+
+| Requirement | Component | Deterministic evidence | Status |
+|---|---|---|---|
+| Durable one-shot schedule metadata | `Job.schedule_at`, migration `0006_durable_scheduling` | submission and migration tests | VERIFIED |
+| Atomic due activation | `jobs/scheduler.py` | due, CAS, duplicate, cancellation tests | VERIFIED |
+| Existing outbox/Kafka bridge | scheduler + `OutboxDispatch` | versioned intent assertions | VERIFIED |
+| Independent scheduler lifecycle | `runtime/scheduler.py` | runtime/static checks | VERIFIED |
+| PostgreSQL row-locking and multi-process behavior | `FOR UPDATE SKIP LOCKED` | live PostgreSQL unavailable | UNVERIFIED |

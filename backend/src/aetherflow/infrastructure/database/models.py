@@ -169,6 +169,7 @@ class Job(Base):
     execution_owner: Mapped[str | None] = mapped_column(String(128))
     execution_dispatch_version: Mapped[int | None] = mapped_column(Integer)
     execution_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    schedule_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, index=True
     )
@@ -291,6 +292,7 @@ class OutboxDispatch(Base):
 
 Index("ix_jobs_user_created", Job.user_id, Job.created_at.desc())
 Index("ix_jobs_state_created", Job.state, Job.created_at)
+Index("ix_jobs_scheduled_due", Job.state, Job.schedule_at, Job.created_at)
 Index(
     "uq_outbox_job_version",
     OutboxDispatch.job_id,

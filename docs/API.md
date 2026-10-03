@@ -36,7 +36,16 @@ Keys use `afk_<public-id>_<secret>`. The public ID is indexed for lookup; only a
 - `GET /api/v1/jobs/{job_id}/events`
 - `POST /api/v1/jobs/{job_id}/cancel`
 
-Submission body conceptually contains `job_type`, `model`, `input`, `configuration`, `priority`, `timeout`, `retry_policy`, `metadata`, and the `Idempotency-Key` header. Responses include job ID, state, timestamps, and links or identifiers for later inspection.
+Submission body contains `type`, `model`, `input`, `configuration`, `priority`,
+`timeout_seconds`, `retry_policy`, `metadata`, optional timezone-aware
+`schedule_at`, and the `Idempotency-Key` header. Responses include job ID,
+state, `schedule_at`, timestamps, and identifiers for later inspection.
+
+`schedule_at` is normalized to UTC and must include an explicit timezone. A
+future value creates durable `ACCEPTED` work without an outbox dispatch until
+the timestamp is due. A value at or before the current UTC time is immediately
+outbox-eligible. The scheduler is internal; there is no public scheduler
+endpoint. Reusing an idempotency key with a different schedule is a conflict.
 
 The first workload is a bounded structured inference operation: a typed input object is submitted with an explicit output schema/version selected by `job_type`. The provider adapter is selected by the runtime-configured provider registry and returns normalized text/structured content and usage metadata; the domain validates the content against the job type's schema before creating `job_results`. Provider credentials are not accepted in job configuration. Arbitrary tools, URLs, code, shell commands, and autonomous planning are not part of this contract.
 
@@ -62,7 +71,7 @@ events, cancellation, provider-independent worker execution, Kafka transport,
 transactional outbox publication, bounded dispatch retry, independent publisher
 runtime, worker execution-lease recovery, provider registry, deterministic mock
 provider, normalized provider failures, and worker-enforced execution timeouts.
-Execution retry orchestration, schedulers, Redis, admin operations routes, and
+Execution retry orchestration, durable scheduling, Redis, admin operations routes, and
 frontend routes remain deferred.
 
 The worker may select the configured `openai` provider, but provider

@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     outbox_initial_backoff_seconds: float = Field(default=1.0, gt=0, le=3600)
     outbox_max_backoff_seconds: float = Field(default=300.0, gt=0, le=86400)
     outbox_publisher_id: str | None = Field(default=None, max_length=128)
+    scheduler_enabled: bool = False
+    scheduler_poll_interval_seconds: float = Field(default=1.0, gt=0, le=300)
+    scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
+    scheduler_id: str = Field(default="aetherflow-scheduler", min_length=1, max_length=128)
     provider_default: str = Field(default="mock", min_length=1, max_length=64)
     provider_openai_api_key: str | None = Field(default=None, min_length=1)
     provider_openai_base_url: str = "https://api.openai.com/v1"

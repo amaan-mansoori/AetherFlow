@@ -115,3 +115,12 @@ public-ID key construction, 429 and `Retry-After` behavior, and fail-open
 operation during Redis timeout. They do not claim a real Redis server or
 cross-process behavior. Real Redis integration remains opt-in and separate
 from the ordinary suite.
+
+## Phase 12 scheduling coverage
+
+`backend/tests/test_phase12_scheduling.py` verifies timezone validation and
+UTC normalization, future/past submission behavior, due activation, bounded
+duplicate polling, cancellation protection, and idempotency conflicts that
+include scheduling metadata. These SQLite tests validate deterministic domain
+behavior only; PostgreSQL `SKIP LOCKED`, process restart, Kafka delivery, and
+multi-process scheduling remain infrastructure checks.

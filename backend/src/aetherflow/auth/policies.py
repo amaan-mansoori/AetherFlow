@@ -2,7 +2,7 @@
 
 import hashlib
 import hmac
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -29,7 +29,7 @@ Session = Annotated[AsyncSession, Depends(get_request_db_session)]
 
 
 def _settings(request: Request) -> Settings:
-    return request.app.state.settings
+    return cast(Settings, request.app.state.settings)
 
 
 def _unauthenticated() -> ApiError:

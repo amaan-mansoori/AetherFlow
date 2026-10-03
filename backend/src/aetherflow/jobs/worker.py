@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from time import perf_counter
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -320,10 +321,13 @@ class Worker:
         )
 
     async def _load_job(self, session: AsyncSession, job_id: UUID) -> Job | None:
-        return await session.scalar(
-            select(Job)
-            .options(selectinload(Job.result), selectinload(Job.attempts))
-            .where(Job.id == job_id)
+        return cast(
+            Job | None,
+            await session.scalar(
+                select(Job)
+                .options(selectinload(Job.result), selectinload(Job.attempts))
+                .where(Job.id == job_id)
+            ),
         )
 
     async def _finish_attempt(

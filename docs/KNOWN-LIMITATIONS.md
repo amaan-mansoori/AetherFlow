@@ -47,3 +47,8 @@
   request limits are not enforced during that degraded interval. Real Redis
   startup and cross-process sharing remain **UNVERIFIED** when Docker is
   unavailable.
+- Phase 12 scheduling is one-shot only; recurring schedules and cron syntax
+  are intentionally out of scope. The scheduler's PostgreSQL row-locking and
+  restart behavior are **UNVERIFIED** against a live PostgreSQL/Kafka Compose
+  stack when Docker is unavailable. Scheduling does not provide exactly-once
+  publication or execution.

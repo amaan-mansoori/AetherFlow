@@ -158,3 +158,17 @@ operational metrics, and emits a rate-limited warning. Authentication,
 PostgreSQL job durability, transactional outbox publication, worker execution,
 and durable retry behavior do not call Redis and therefore continue to use
 their existing authoritative systems.
+
+## Phase 12 durable scheduling
+
+Initial user scheduling and execution retry are separate durable mechanisms.
+Future `schedule_at` jobs remain `ACCEPTED` until a scheduler activates them.
+Due activation commits `ACCEPTED -> QUEUED`, its event, and a versioned outbox
+intent together. The outbox publisher then performs the normal Kafka path.
+The scheduler does not publish directly and does not use Redis.
+
+Cancellation before activation changes the job to `CANCEL_REQUESTED`; because
+the scheduler selects only `ACCEPTED`, it cannot resurrect that job. A crash
+before activation commit is rolled back. A crash after commit is recovered by
+the outbox lease/retry mechanism. Delivery and execution remain at least once,
+with no exactly-once claim.

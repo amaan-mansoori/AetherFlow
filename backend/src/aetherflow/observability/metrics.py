@@ -137,6 +137,13 @@ _COUNTERS = {
     "aetherflow_rate_limit_bypasses_total": ("Redis rate-limit bypasses.", ("rate_class",)),
     "aetherflow_rate_limit_requests_total": ("Rate-limited requests accepted.", ("rate_class",)),
     "aetherflow_rate_limit_blocked_total": ("Rate-limited requests blocked.", ("rate_class",)),
+    "aetherflow_scheduled_jobs_created_total": ("Scheduled jobs created.", ()),
+    "aetherflow_scheduled_jobs_due_total": ("Scheduled jobs activated when due.", ()),
+    "aetherflow_scheduler_poll_cycles_total": ("Scheduler poll cycles.", ()),
+    "aetherflow_scheduler_claims_total": ("Scheduler activation claims.", ()),
+    "aetherflow_scheduler_claim_conflicts_total": ("Scheduler activation CAS conflicts.", ()),
+    "aetherflow_scheduler_errors_total": ("Scheduler iteration errors.", ()),
+    "aetherflow_scheduler_active_state_total": ("Scheduler lifecycle state changes.", ("state",)),
 }
 for _name, (_help, _labels) in _COUNTERS.items():
     METRICS.counter(_name, _help, _labels)
@@ -150,5 +157,6 @@ for _name, _help, _labels in (
         ("provider",),
     ),
     ("aetherflow_redis_operation_duration_seconds", "Redis operation duration.", ("operation",)),
+    ("aetherflow_scheduler_lag_seconds", "Schedule activation lag.", ()),
 ):
     METRICS.histogram(_name, _help, _labels)

@@ -2,7 +2,7 @@
 
 **Distributed AI Job Orchestration Platform**
 
-> **Current status: Phase 11 - Redis coordination and distributed rate limiting**
+> **Current status: Phase 12 - durable one-shot scheduling**
 
 Phase 4C transactionally records each job's Kafka dispatch intent with durable
 job creation. Phase 4D/4E add an independent bounded publisher runtime with
@@ -27,6 +27,10 @@ Phase 11 adds optional Redis-backed distributed API rate limiting. PostgreSQL
 remains the durable source of truth, Kafka remains asynchronous transport, and
 Redis is ephemeral coordination only. Rate limiting is fail-open when Redis is
 unavailable.
+Phase 12 adds durable one-shot scheduling. Future jobs remain in PostgreSQL as
+`ACCEPTED` records without an outbox intent until `schedule_at` is due. The
+independent scheduler then atomically moves the job to `QUEUED` and creates the
+existing transactional outbox intent; it never publishes to Kafka directly.
 
 ## Local production-like Compose stack
 
@@ -39,9 +43,9 @@ docker compose up --build
 
 Compose starts PostgreSQL, KRaft Kafka, and internal Redis, runs
 `alembic upgrade head` once,
-then starts the API, worker, and outbox publisher. Verify `GET /health/live`,
-`GET /health/ready`, and `GET /metrics`. Use `docker compose logs -f api worker
-outbox-publisher` to inspect processes and `docker compose down` to stop them.
+then starts the API, worker, outbox publisher, and scheduler. Verify `GET /health/live`,
+`GET /health/ready`, and `GET /metrics`. Use `docker compose logs -f api worker outbox-publisher scheduler` to inspect
+processes and `docker compose down` to stop them.
 Use `docker compose down -v` only when intentionally deleting local data.
 The Compose credentials are local-development values, not production secrets.
 
