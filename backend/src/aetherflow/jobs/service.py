@@ -12,6 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from aetherflow.api.errors import ApiError
 from aetherflow.infrastructure.database.models import (
+    AuditEventType,
+    AuditLog,
     IdempotencyRecord,
     Job,
     JobAttempt,
@@ -194,6 +196,7 @@ async def cancel_job(
     user: User,
     job_id: UUID,
     request_id: str | None = None,
+    audit_admin_action: bool = False,
 ) -> Job:
     """Request job cancellation via the authoritative state machine."""
     query = (
@@ -230,6 +233,8 @@ async def cancel_job(
         actor=f"user:{user.id}",
         payload={"request_id": request_id, "reason": "user_cancellation_request"},
         expected_version=job.version,
+        audit_actor_user_id=user.id if audit_admin_action else None,
+        audit_event_type=AuditEventType.ADMIN_JOB_CANCELLED if audit_admin_action else None,
     )
 
 
@@ -240,6 +245,8 @@ async def transition_job_state(
     actor: str,
     payload: dict[str, Any] | None = None,
     expected_version: int | None = None,
+    audit_actor_user_id: UUID | None = None,
+    audit_event_type: AuditEventType | None = None,
 ) -> Job:
     """Apply a state transition with explicit state/version compare-and-set semantics."""
     job = await session.scalar(
@@ -297,6 +304,21 @@ async def transition_job_state(
     )
     if target_state == JobState.CANCELLED:
         METRICS.inc("aetherflow_jobs_cancelled_total", job_type=job.type)
+    if audit_actor_user_id is not None and audit_event_type is not None:
+        session.add(
+            AuditLog(
+                event_type=audit_event_type,
+                actor_user_id=audit_actor_user_id,
+                request_id=(payload or {}).get("request_id"),
+                success=True,
+                source="admin",
+                context={
+                    "operation": "cancel_job",
+                    "target_job_id": str(job.id),
+                    "result": "CANCEL_REQUESTED",
+                },
+            )
+        )
     await session.commit()
     await session.refresh(job)
     return job

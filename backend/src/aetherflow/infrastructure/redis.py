@@ -4,8 +4,8 @@ from collections.abc import Awaitable
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from redis.asyncio import Redis
-from redis.asyncio.connection import ConnectionPool
+from redis.asyncio import Redis  # type: ignore[import-not-found]
+from redis.asyncio.connection import ConnectionPool  # type: ignore[import-not-found]
 
 from aetherflow.config.settings import Settings
 

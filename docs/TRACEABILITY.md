@@ -154,3 +154,14 @@ and Kafka integration/concurrency remain environment-gated.
 | Existing outbox/Kafka bridge | scheduler + `OutboxDispatch` | versioned intent assertions | VERIFIED |
 | Independent scheduler lifecycle | `runtime/scheduler.py` | runtime/static checks | VERIFIED |
 | PostgreSQL row-locking and multi-process behavior | `FOR UPDATE SKIP LOCKED` | live PostgreSQL unavailable | UNVERIFIED |
+
+## Phase 13 implementation mapping
+
+| Requirement | Component | Deterministic evidence | Status |
+|---|---|---|---|
+| Explicit ADMIN authorization | `auth/policies.py`, `api/v1/admin.py` | admin boundary tests | VERIFIED |
+| Bounded operational inspection | `jobs/admin.py`, admin routes | filter, pagination, redaction tests | VERIFIED |
+| CAS-backed admin cancellation | `jobs/service.py` | cancellation and terminal-state tests | VERIFIED |
+| Mutation auditability | `AuditLog`, `ADMIN_JOB_CANCELLED` | actor/target/no-secret assertions | VERIFIED |
+| Manual retry/requeue safety | no route by design | ADR-0022 limitation | VERIFIED |
+| Live PostgreSQL/Kafka control-plane behavior | infrastructure runtime | Docker engine unavailable | UNVERIFIED |

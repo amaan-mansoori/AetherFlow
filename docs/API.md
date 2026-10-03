@@ -59,9 +59,22 @@ In the Compose deployment, API readiness represents PostgreSQL availability.
 Kafka readiness is enforced for the worker and outbox publisher process
 startup, not by API liveness.
 
-## Future admin/operations surface
+## Administrative operations
 
-The following routes are specified for a later phase and are not implemented in the Phase 3 backend: `GET /api/v1/admin/jobs`, `GET /api/v1/admin/workers`, `GET /api/v1/admin/queues`, `GET /api/v1/admin/audit-logs`, and `GET /api/v1/admin/metrics`. When added, operational endpoints must expose real observed data and enforce admin authorization.
+Phase 13 adds an explicit `ADMIN`-only control plane:
+
+- `GET /api/v1/admin/jobs` supports bounded filtering by job/user ID, state,
+  type, model, provider, priority, created/scheduled ranges, and offset
+  pagination. Ordering is stable by `created_at DESC, id DESC`.
+- `GET /api/v1/admin/jobs/{job_id}` returns bounded attempts, lifecycle
+  events, and durable outbox publication metadata.
+- `POST /api/v1/admin/jobs/{job_id}/cancel` uses the existing versioned CAS
+  cancellation primitive and writes an audit event.
+
+Administrative responses omit job input and configuration, redact sensitive
+operational values, and cap child collections at 100 records. There is no
+admin retry/requeue route: the current state machine has no safe manual retry
+transition, so execution retry remains worker-owned and durable.
 
 ## Phase 5 status
 

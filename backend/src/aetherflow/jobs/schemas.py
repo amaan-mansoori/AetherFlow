@@ -140,3 +140,48 @@ class JobDetailResponse(JobResponse):
     metadata: dict[str, Any]
     result: JobResultResponse | None = None
     latest_attempt: JobAttemptResponse | None = None
+
+
+class AdminJobResponse(JobResponse):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    model: str
+
+
+class AdminAttemptResponse(JobAttemptResponse):
+    error_message: str | None = Field(default=None, max_length=400)
+
+
+class AdminEventResponse(JobEventResponse):
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminDispatchResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    job_id: UUID
+    job_version: int
+    message_type: str
+    schema_version: str
+    enqueued_at: datetime
+    created_at: datetime
+    published_at: datetime | None = None
+    attempt_count: int
+    failure_category: str | None = None
+    publication_state: str
+    available_at: datetime | None = None
+    next_attempt_at: datetime | None = None
+    last_error: str | None = Field(default=None, max_length=400)
+
+
+class AdminJobDetailResponse(AdminJobResponse):
+    retry_policy: dict[str, Any]
+    metadata: dict[str, Any]
+    execution_owner: str | None = None
+    execution_dispatch_version: int | None = None
+    execution_lease_until: datetime | None = None
+    attempts: list[AdminAttemptResponse]
+    events: list[AdminEventResponse]
+    dispatches: list[AdminDispatchResponse]

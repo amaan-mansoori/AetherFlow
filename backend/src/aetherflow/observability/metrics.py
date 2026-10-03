@@ -144,6 +144,10 @@ _COUNTERS = {
     "aetherflow_scheduler_claim_conflicts_total": ("Scheduler activation CAS conflicts.", ()),
     "aetherflow_scheduler_errors_total": ("Scheduler iteration errors.", ()),
     "aetherflow_scheduler_active_state_total": ("Scheduler lifecycle state changes.", ("state",)),
+    "aetherflow_admin_operations_total": (
+        "Administrative operations.",
+        ("operation", "outcome"),
+    ),
 }
 for _name, (_help, _labels) in _COUNTERS.items():
     METRICS.counter(_name, _help, _labels)

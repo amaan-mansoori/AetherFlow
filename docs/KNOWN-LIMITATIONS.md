@@ -52,3 +52,8 @@
   restart behavior are **UNVERIFIED** against a live PostgreSQL/Kafka Compose
   stack when Docker is unavailable. Scheduling does not provide exactly-once
   publication or execution.
+- Phase 13 does not expose manual admin retry/requeue because the current
+  state machine has no safe transition for it. Execution retry remains
+  worker-owned and durable. Admin inspection and cancellation are covered by
+  SQLite tests; live PostgreSQL/Kafka behavior remains unverified when Docker
+  is unavailable.

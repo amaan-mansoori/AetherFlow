@@ -256,3 +256,18 @@ Initial scheduling is distinct from execution retry: retry intents remain
 `RETRY_SCHEDULED` with `available_at` and continue to be handled by the
 existing outbox publisher. Cancellation of a future `ACCEPTED` job wins by
 the existing CAS transition, and the scheduler only selects `ACCEPTED` rows.
+
+## Phase 13 administrative control plane
+
+The administrative API is a thin, server-side `ADMIN`-authorized view over
+existing PostgreSQL primitives. It does not create a second state machine,
+retry system, scheduler, or Kafka publication path. Job inspection uses
+bounded indexed queries and stable offset ordering. Detail responses read
+durable attempts, lifecycle events, and outbox rows while omitting job input
+and configuration.
+
+Administrative cancellation calls the existing job cancellation service, which
+performs the authoritative versioned CAS transition. The successful mutation
+and its safe audit record are committed in the same transaction. Manual retry
+is intentionally not exposed because no existing state transition can express
+it without bypassing durable retry policy.

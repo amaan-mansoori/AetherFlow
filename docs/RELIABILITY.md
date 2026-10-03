@@ -172,3 +172,13 @@ the scheduler selects only `ACCEPTED`, it cannot resurrect that job. A crash
 before activation commit is rolled back. A crash after commit is recovered by
 the outbox lease/retry mechanism. Delivery and execution remain at least once,
 with no exactly-once claim.
+
+## Phase 13 administrative operations
+
+Admin inspection is read-only against durable job, attempt, event, and outbox
+records. Every collection is bounded and ordered deterministically. Admin
+cancellation reuses the existing CAS transition and commits its audit record
+with the mutation. Terminal jobs remain terminal and future scheduled jobs
+cannot be resurrected. Manual retry/requeue is not supported because adding
+one would require a new authoritative state transition rather than bypassing
+the existing execution retry policy.

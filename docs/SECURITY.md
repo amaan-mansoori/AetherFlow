@@ -30,6 +30,14 @@ Redact authorization headers, API keys, passwords, provider credentials, raw pro
 
 Security audit events cover registration, successful/failed login, refresh creation/rotation/reuse failure, logout, API-key creation/revocation, and authorization denial. Audit context contains only safe metadata such as public key ID and reason.
 
+Phase 13 administrative routes use the centralized `require_admin`
+dependency; authentication is still required and normal `USER` principals
+receive `403`. Admin job responses omit raw input/configuration, bound child
+collections, and redact sensitive-looking keys and operational error strings.
+Administrative cancellation records the server-derived actor, target,
+operation, result, and request ID in the existing audit log. No admin
+operation accepts client actor identity or publishes directly to Kafka.
+
 The unauthenticated `/metrics` endpoint exposes only bounded operational
 labels and counters. It does not expose job IDs, request IDs, user data,
 paths with identifiers, credentials, authorization headers, or exception text.

@@ -124,3 +124,13 @@ duplicate polling, cancellation protection, and idempotency conflicts that
 include scheduling metadata. These SQLite tests validate deterministic domain
 behavior only; PostgreSQL `SKIP LOCKED`, process restart, Kafka delivery, and
 multi-process scheduling remain infrastructure checks.
+
+## Phase 13 administrative coverage
+
+`backend/tests/test_phase13_admin.py` verifies unauthenticated and `USER`
+denial, bounded admin listing and filtering, redacted detail responses,
+cancellation through the existing state machine, terminal-state protection,
+and safe audit actor and target metadata. Manual retry/requeue is intentionally
+tested as an absent capability rather than introducing an unsafe transition.
+SQLite still does not prove PostgreSQL row-locking or live Kafka/outbox
+behavior.
