@@ -1,6 +1,6 @@
 # Testing Strategy
 
-**Status:** Architecture / Specification Phase
+**Status:** Implementation and deterministic verification through Phase 15
 
 ## Layers
 
@@ -134,3 +134,50 @@ and safe audit actor and target metadata. Manual retry/requeue is intentionally
 tested as an absent capability rather than introducing an unsafe transition.
 SQLite still does not prove PostgreSQL row-locking or live Kafka/outbox
 behavior.
+
+Phase 14 adds `backend/tests/test_phase14_api_pagination.py` to verify that
+optional user job-event and attempt pagination returns stable bounded pages
+while requests without pagination retain the existing response behavior.
+
+Phase 15 authentication and onboarding coverage extends `backend/tests/test_auth.py`
+with privilege/owner-field injection rejection, Origin checks on cookie-auth
+routes, immediate invalidation of family-bound access tokens after logout,
+opt-in and idempotent demo provisioning, refusal to overwrite an unrelated
+identity, safe read-only demo access, private-job isolation, and trusted admin
+promotion. Tests use the isolated in-memory SQLite app fixture and do not
+connect to external services. The `DEMO` schema migration is checked separately
+against clean and pre-existing SQLite databases.
+
+Frontend tests use Vitest and Testing Library for access-token memory storage,
+refresh-cookie request behavior, refresh after 401, structured errors and
+`Retry-After`, bounded API parameters, submission/idempotency, job filtering and
+pagination, detail rendering, state labels, cancellation confirmation, admin
+role/redaction behavior, command-palette keyboard navigation, registration
+validation and signed-out success, demo availability/read-only labeling, and
+safe post-login return destinations.
+
+Phase 14 verification (historical): frontend lint, TypeScript, component tests,
+and production build passed; 135 backend tests passed; Ruff passed; changed
+backend modules passed mypy; full mypy reported two Redis typing errors in
+`infrastructure/redis.py`. The Docker Linux engine was unavailable, so its live
+Compose checks were **UNVERIFIED**. Browser checks exercised the earlier
+operations console against disposable SQLite and validated console routes, not
+worker or production integration.
+
+Phase 15 acceptance verification (2026-10-04): all 149 backend tests passed;
+Ruff format/check passed; mypy passed for the nine changed backend source
+modules. Full `mypy backend/src` still reports the two existing errors in
+`infrastructure/redis.py` (`_pool` annotation and `Redis.aclose`). All 31
+frontend tests, ESLint, TypeScript, and the production build passed. Disposable
+SQLite/Alembic verification passed upgrade to head, preservation of a
+pre-existing user, guarded downgrade while DEMO is assigned, downgrade after
+unassignment, and re-upgrade.
+
+Browser verification against a disposable SQLite-backed API with Kafka, Redis,
+and the scheduler disabled confirmed registration remains signed out, login,
+refresh-cookie session restoration after reload, logout invalidation, protected
+route redirect after logout, demo availability/read-only explanation, and the
+DEMO account's own sample records. Registration and demo were checked at 375px
+without horizontal overflow. PostgreSQL, Kafka, Redis, worker execution, and
+full Compose integration were **UNVERIFIED** because Docker Desktop's Linux
+engine was unavailable. No external provider credentials were supplied.

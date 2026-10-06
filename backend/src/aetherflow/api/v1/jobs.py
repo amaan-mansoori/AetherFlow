@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aetherflow.api.dependencies import get_request_db_session
-from aetherflow.auth.policies import require_authenticated_user
+from aetherflow.auth.policies import require_authenticated_user, require_non_demo_user
 from aetherflow.infrastructure.database.models import Job, JobState, User
 from aetherflow.jobs.idempotency import validate_idempotency_key
 from aetherflow.jobs.schemas import (
@@ -30,6 +30,7 @@ from aetherflow.observability.context import get_request_id
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 db_session = Depends(get_request_db_session)
 authenticated_user = Depends(require_authenticated_user)
+non_demo_user = Depends(require_non_demo_user)
 
 
 def _to_job_detail(job: Job) -> dict[str, Any]:
@@ -76,7 +77,7 @@ async def create_job(
     payload: JobCreateRequest,
     response: Response,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
-    user: User = authenticated_user,
+    user: User = non_demo_user,
     session: AsyncSession = db_session,
 ) -> dict[str, Any]:
     validated_key = validate_idempotency_key(idempotency_key)
@@ -117,27 +118,31 @@ async def get_job_detail(
 @router.get("/{job_id}/events", response_model=list[JobEventResponse])
 async def get_events(
     job_id: UUID,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
     user: User = authenticated_user,
     session: AsyncSession = db_session,
 ) -> list[JobEventResponse]:
-    events = await get_job_events(session, user, job_id)
+    events = await get_job_events(session, user, job_id, limit=limit, offset=offset)
     return [JobEventResponse.model_validate(e) for e in events]
 
 
 @router.get("/{job_id}/attempts", response_model=list[JobAttemptResponse])
 async def get_attempts(
     job_id: UUID,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
     user: User = authenticated_user,
     session: AsyncSession = db_session,
 ) -> list[JobAttemptResponse]:
-    attempts = await get_job_attempts(session, user, job_id)
+    attempts = await get_job_attempts(session, user, job_id, limit=limit, offset=offset)
     return [JobAttemptResponse.model_validate(a) for a in attempts]
 
 
 @router.post("/{job_id}/cancel", response_model=JobDetailResponse)
 async def cancel_job_endpoint(
     job_id: UUID,
-    user: User = authenticated_user,
+    user: User = non_demo_user,
     session: AsyncSession = db_session,
 ) -> dict[str, Any]:
     job = await cancel_job(session, user, job_id, request_id=get_request_id())

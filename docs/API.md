@@ -1,21 +1,31 @@
 # API Contract
 
-**Status:** Architecture / Specification Phase  
+**Status:** Implemented contract
 **Versioning:** `/api/v1`; additive changes are preferred, breaking changes require a new version.
 
 ## Authentication
 
 - `POST /api/v1/auth/register`
+- `GET /api/v1/auth/demo`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/auth/refresh`
 - `POST /api/v1/auth/logout`
 
-`POST /api/v1/auth/register` accepts `{ "email": "...", "password": "..." }` and returns a safe user object with `201`. Registration always assigns `USER`; role input is not accepted. `POST /api/v1/auth/login` accepts the same credentials and returns a short-lived bearer access token plus safe user data. It also sets a rotating opaque refresh credential in an `HttpOnly` cookie. Invalid credentials return the same `401 AUTHENTICATION_REQUIRED` response for existing and nonexistent accounts.
+`POST /api/v1/auth/register` accepts `{ "email": "...", "password": "..." }` and returns a safe user object with `201`. Email is normalized to lowercase; passwords must contain 12–128 characters and not be blank. Registration always assigns `USER`; role, permission, admin, and owner fields are rejected. Registration does not create a session. Invalid input returns the established validation error; a duplicate address returns `409 CONFLICT`. The reserved demo email cannot be registered publicly. Email verification and password recovery are not implemented.
 
-`POST /api/v1/auth/refresh` reads only the refresh cookie, rotates it, revokes the used credential, and returns a new access token. Reuse of a rotated token revokes its session family and returns `401`. `POST /api/v1/auth/logout` revokes the presented refresh session and clears the cookie. The cookie uses `HttpOnly`, `SameSite=Strict`, a path limited to `/api/v1/auth`, and environment-configured `Secure`/domain values.
+`POST /api/v1/auth/login` accepts the same credentials and returns a short-lived bearer access token plus safe user data. It also sets a rotating opaque refresh credential in an `HttpOnly` cookie. Invalid credentials return the same `401 AUTHENTICATION_REQUIRED` response for existing and nonexistent accounts. Login, refresh, and logout reject a supplied browser `Origin` that is not in the configured CORS origin allowlist; non-browser clients may omit Origin.
+
+`POST /api/v1/auth/refresh` reads only the refresh cookie, rotates it, revokes the used credential, and returns a new access token. Reuse of a rotated token revokes its session family and returns `401`. `POST /api/v1/auth/logout` revokes the presented refresh session family and clears the cookie; newly issued family-bound bearer tokens are rejected immediately. Tokens issued before session-family binding remain compatible until their short expiration. The cookie uses `HttpOnly`, `SameSite=Strict`, a path limited to `/api/v1/auth`, and environment-configured `Secure`/domain values. HTTPS deployments must enable secure cookies; production settings enforce this.
 
 `GET /api/v1/auth/me` requires `Authorization: Bearer <access-token>` and returns only ID, email, roles, and safe timestamps. Access tokens contain only subject, roles, issue/expiry times, and token type.
+
+`GET /api/v1/auth/demo` is unauthenticated and returns `{ "available": boolean, "access_mode": "read-only" }`. Availability requires both `AETHERFLOW_DEMO_ENABLED=true` and an active user with the reserved DEMO identity and exact DEMO role. It does not return credentials. The identity is created only by the trusted `aetherflow.commands.provision_demo` command with an operator-supplied `AETHERFLOW_DEMO_PASSWORD`.
+
+New bearer tokens additionally carry a session-family identifier; logout
+revokes that family. Authorization resolves current roles from the database,
+not from token role claims. Tokens issued before this binding remain valid only
+until their normal short expiration.
 
 ## API keys
 
@@ -35,6 +45,10 @@ Keys use `afk_<public-id>_<secret>`. The public ID is indexed for lookup; only a
 - `GET /api/v1/jobs/{job_id}/attempts`
 - `GET /api/v1/jobs/{job_id}/events`
 - `POST /api/v1/jobs/{job_id}/cancel`
+
+The events and attempts endpoints accept optional `limit` (1–100) and
+non-negative `offset` query parameters for bounded console history pages.
+When omitted, the existing full per-job response behavior is preserved.
 
 Submission body contains `type`, `model`, `input`, `configuration`, `priority`,
 `timeout_seconds`, `retry_policy`, `metadata`, optional timezone-aware
@@ -76,20 +90,28 @@ operational values, and cap child collections at 100 records. There is no
 admin retry/requeue route: the current state machine has no safe manual retry
 transition, so execution retry remains worker-owned and durable.
 
-## Phase 5 status
+## Implementation status
 
-Implemented through Phase 5: registration, identity/access, durable jobs,
-idempotent submission, explicit versioned state transitions, attempts/results/
-events, cancellation, provider-independent worker execution, Kafka transport,
+Implemented capabilities include registration and session access, durable
+idempotent jobs, explicit versioned state transitions, attempts/results/events,
+cancellation, provider-independent worker execution, Kafka transport,
 transactional outbox publication, bounded dispatch retry, independent publisher
-runtime, worker execution-lease recovery, provider registry, deterministic mock
-provider, normalized provider failures, and worker-enforced execution timeouts.
-Execution retry orchestration, durable scheduling, Redis, admin operations routes, and
-frontend routes remain deferred.
+runtime, worker execution-lease recovery, provider abstraction, execution
+retry, Redis-backed rate limiting, durable scheduling, administrative
+operations, the Next.js console, and restricted demo provisioning. The
+frontend uses the documented API contracts and does not add backend
+capabilities.
 
 The worker may select the configured `openai` provider, but provider
 credentials are runtime environment settings and cannot be supplied through
 the job API.
+
+The DEMO role may read only its own job records and is denied job submission,
+job cancellation, API-key creation/revocation, and all administrative routes.
+The seeded future-scheduled and cancellation-requested examples have no outbox
+dispatch intent and are not evidence of worker or provider execution. Redis
+rate limiting is optional outside Compose and intentionally fails open if
+Redis is unavailable.
 
 ## Contract rules
 

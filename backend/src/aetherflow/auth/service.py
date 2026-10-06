@@ -28,6 +28,8 @@ from aetherflow.infrastructure.database.models import (
     utc_now,
 )
 
+DEMO_EMAIL = "recruiter-demo@example.com"
+
 
 def _as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
@@ -83,7 +85,14 @@ async def get_user_role(session: AsyncSession, name: str) -> Role:
 async def register_user(
     session: AsyncSession, email: str, password: str, request_id: str | None
 ) -> User:
-    user = User(email=normalize_email(email), password_hash=hash_password(password))
+    normalized_email = normalize_email(email)
+    if normalized_email == DEMO_EMAIL:
+        raise ApiError(
+            "CONFLICT",
+            "This email address is reserved for controlled demo provisioning.",
+            409,
+        )
+    user = User(email=normalized_email, password_hash=hash_password(password))
     user.roles.append(await get_user_role(session, "USER"))
     session.add(user)
     try:
@@ -112,8 +121,8 @@ async def register_user(
 
 
 async def authenticate_user(
-    session: AsyncSession, settings: Settings, email: str, password: str, request_id: str | None
-) -> tuple[User, str]:
+    session: AsyncSession, email: str, password: str, request_id: str | None
+) -> User:
     normalized = normalize_email(email)
     user = await session.scalar(
         select(User).options(selectinload(User.roles)).where(User.email == normalized)
@@ -136,7 +145,6 @@ async def authenticate_user(
         raise ApiError("AUTHENTICATION_REQUIRED", "Invalid email or password.", 401)
     assert user is not None
     user.last_login_at = utc_now()
-    token = create_access_token(settings, user.id, user_roles(user))
     await write_audit(
         session,
         AuditEventType.LOGIN_SUCCESS,
@@ -146,12 +154,21 @@ async def authenticate_user(
     )
     await session.commit()
     await session.refresh(user, attribute_names=["roles"])
-    return user, token
+    return user
+
+
+async def demo_access_available(session: AsyncSession, enabled: bool) -> bool:
+    if not enabled:
+        return False
+    user = await session.scalar(
+        select(User).options(selectinload(User.roles)).where(User.email == DEMO_EMAIL)
+    )
+    return bool(user and user.status == UserStatus.ACTIVE and user_roles(user) == ["DEMO"])
 
 
 async def create_refresh_session(
     session: AsyncSession, user: User, settings: Settings, request_id: str | None
-) -> str:
+) -> tuple[str, UUID]:
     raw, token_hash, family_id = generate_refresh_token()
     session.add(
         RefreshSession(
@@ -170,7 +187,7 @@ async def create_refresh_session(
         context={"operation": "session_created"},
     )
     await session.commit()
-    return raw
+    return raw, family_id
 
 
 async def rotate_refresh_session(
@@ -234,7 +251,7 @@ async def rotate_refresh_session(
             expires_at=now + timedelta(days=settings.refresh_token_days),
         )
     )
-    access = create_access_token(settings, user.id, user_roles(user))
+    access = create_access_token(settings, user.id, user_roles(user), current.family_id)
     await write_audit(
         session,
         AuditEventType.TOKEN_REFRESH,
@@ -255,7 +272,12 @@ async def revoke_refresh_session(
             select(RefreshSession).where(RefreshSession.token_hash == hash_refresh_token(raw_token))
         )
         if session_token and session_token.revoked_at is None:
-            session_token.revoked_at = utc_now()
+            now = utc_now()
+            await session.execute(
+                update(RefreshSession)
+                .where(RefreshSession.family_id == session_token.family_id)
+                .values(revoked_at=now)
+            )
             await write_audit(
                 session,
                 AuditEventType.LOGOUT,

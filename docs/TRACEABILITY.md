@@ -1,6 +1,6 @@
 # Requirement Traceability
 
-**Status:** Architecture / Specification Phase  
+**Status:** Implementation mapping through Phase 14
 **Format:** Requirement -> Component -> API -> Database -> Test -> Documentation
 
 | Requirement | Component | API | Database | Test | Documentation |
@@ -165,3 +165,15 @@ and Kafka integration/concurrency remain environment-gated.
 | Mutation auditability | `AuditLog`, `ADMIN_JOB_CANCELLED` | actor/target/no-secret assertions | VERIFIED |
 | Manual retry/requeue safety | no route by design | ADR-0022 limitation | VERIFIED |
 | Live PostgreSQL/Kafka control-plane behavior | infrastructure runtime | Docker engine unavailable | UNVERIFIED |
+
+## Phase 14 implementation mapping
+
+| Requirement | Component | Deterministic evidence | Status |
+|---|---|---|---|
+| Auth/session follows backend contract | frontend auth provider/API client | refresh-cookie and request tests | VERIFIED |
+| Bounded job pages and history | API client, jobs routes | request and backend pagination tests | VERIFIED |
+| Real-data overview and API health | overview page | API-driven state; UI component tests | VERIFIED |
+| Submission and idempotency header | submit page/API client | payload validation and request tests | VERIFIED |
+| Lifecycle, attempts, results, cancellation | execution detail page | status, timeline and confirmation tests | VERIFIED |
+| ADMIN operational console | admin route and role-aware navigation | role guard and API client tests | VERIFIED |
+| Live PostgreSQL/Kafka/Redis browser E2E | Docker Compose | Docker Linux engine unavailable | UNVERIFIED |

@@ -12,7 +12,12 @@ from aetherflow.config.settings import Settings
 ACCESS_TOKEN_ALGORITHM = "HS256"
 
 
-def create_access_token(settings: Settings, user_id: UUID, roles: list[str]) -> str:
+def create_access_token(
+    settings: Settings,
+    user_id: UUID,
+    roles: list[str],
+    session_family_id: UUID | None = None,
+) -> str:
     now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
@@ -21,6 +26,8 @@ def create_access_token(settings: Settings, user_id: UUID, roles: list[str]) -> 
         "exp": now + timedelta(minutes=settings.access_token_minutes),
         "typ": "access",
     }
+    if session_family_id is not None:
+        payload["sid"] = str(session_family_id)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ACCESS_TOKEN_ALGORITHM)
 
 

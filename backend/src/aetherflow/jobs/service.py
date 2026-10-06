@@ -34,7 +34,9 @@ async def is_admin_user(session: AsyncSession, user: User) -> bool:
     """Return True if the user has the ADMIN role."""
     if "roles" not in user.__dict__:
         await session.refresh(user, attribute_names=["roles"])
-    return any(role.name == "ADMIN" for role in user.roles)
+    return not any(role.name == "DEMO" for role in user.roles) and any(
+        role.name == "ADMIN" for role in user.roles
+    )
 
 
 async def submit_job(
@@ -518,23 +520,47 @@ async def record_job_result(
     return result
 
 
-async def get_job_events(session: AsyncSession, user: User, job_id: UUID) -> list[JobEvent]:
+async def get_job_events(
+    session: AsyncSession,
+    user: User,
+    job_id: UUID,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[JobEvent]:
     """Retrieve audit lifecycle events for a visible job."""
     # Ensure job is visible to user
     await get_job(session, user, job_id)
-    events = await session.scalars(
-        select(JobEvent).where(JobEvent.job_id == job_id).order_by(JobEvent.created_at.asc())
+    query = (
+        select(JobEvent)
+        .where(JobEvent.job_id == job_id)
+        .order_by(JobEvent.created_at.asc(), JobEvent.id.asc())
+        .offset(offset)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    events = await session.scalars(query)
     return list(events.all())
 
 
-async def get_job_attempts(session: AsyncSession, user: User, job_id: UUID) -> list[JobAttempt]:
+async def get_job_attempts(
+    session: AsyncSession,
+    user: User,
+    job_id: UUID,
+    *,
+    limit: int | None = None,
+    offset: int = 0,
+) -> list[JobAttempt]:
     """Retrieve execution attempts for a visible job."""
     # Ensure job is visible to user
     await get_job(session, user, job_id)
-    attempts = await session.scalars(
+    query = (
         select(JobAttempt)
         .where(JobAttempt.job_id == job_id)
         .order_by(JobAttempt.attempt_number.asc())
+        .offset(offset)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    attempts = await session.scalars(query)
     return list(attempts.all())

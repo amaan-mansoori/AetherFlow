@@ -1,6 +1,6 @@
 # Known Limitations
 
-**Status:** Architecture / Specification Phase
+**Status:** Implementation limitations through Phase 15
 
 - External AI calls may execute twice under at-least-once delivery; durable result deduplication cannot undo provider-side work or cost.
 - Provider cancellation may be unavailable after a request starts.
@@ -8,9 +8,9 @@
 - Initial polling is less immediate and less efficient than streaming.
 - One tenant does not demonstrate tenant isolation or cross-tenant quotas.
 - The mock provider is deterministic and must not be represented as model-quality evidence.
-- Cloud, token refresh, retention, and malformed-output retry policy remain open decisions.
+- Cloud deployment, retention, and malformed-output retry policy remain open decisions. Browser session restoration follows the existing rotating HttpOnly refresh-cookie contract.
 - No performance numbers are known at this phase.
-- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Phase 4A/4B/4C/4D/4E/4F and Phase 5 now provide execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, and a deterministic mock provider; schedulers, frontend, and cloud deployment remain deferred.
+- Phase 3 persisted durable jobs and lifecycle data but did not execute jobs asynchronously. Later phases added execution contracts, Kafka transport, durable dispatch intent, bounded dispatch retry, worker crash recovery, a provider boundary, a deterministic mock provider, durable scheduling, and the Phase 14 console; cloud deployment remains deferred.
 - Phase 6 adds durable execution retry for bounded retryable provider failures;
   there is still no retry API action, operator replay workflow, or provider-call
   resumption after a process crash.
@@ -21,7 +21,7 @@
   deployment, backups, broker/database HA, and external smoke verification are
   deferred.
 - PostgreSQL-specific concurrency verification has not been performed in the current isolated test environment.
-- Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Scheduler coordination, execution deduplication, retries, dead letters, and production worker deployment remain deferred.
+- Phase 4A provides provider-independent execution and worker contracts plus an in-process dispatcher for deterministic tests. Later phases add durable scheduling and retries, but do not provide exactly-once execution, a DLQ/operator replay API, or live production-worker verification.
 - Phase 4B introduced the Kafka adapter; Phase 4C moved publication behind the
   durable outbox. Kafka broker integration and PostgreSQL concurrency remain
   unverified in this environment.
@@ -57,3 +57,24 @@
   worker-owned and durable. Admin inspection and cancellation are covered by
   SQLite tests; live PostgreSQL/Kafka behavior remains unverified when Docker
   is unavailable.
+- Phase 14's overview uses a bounded recent-job sample because no count or
+  aggregate job endpoint exists. `/activity` shows recent job records ordered
+  by `updated_at`; the API has no global event feed, worker registry, or
+  cross-process service health. Admin detail intentionally omits result bodies.
+  Job detail polling is per open detail route and remains polling-based; live
+  PostgreSQL/Kafka/Redis Compose verification is unverified when Docker is
+  unavailable.
+- Phase 15 does not implement email verification, account activation, or
+  password recovery; public registration proves neither email ownership nor
+  credential recovery. Demo access is explicitly read-only and sample fixtures
+  remain `ACCEPTED` and `CANCEL_REQUESTED` without worker dispatch or fabricated
+  results. Operators must protect and distribute the shared demo password
+  outside the application. Redis-backed auth/API limiting remains optional
+  outside Compose and fails open on Redis errors.
+- Phase 15 acceptance verification passed against isolated SQLite and fake
+  service boundaries. Docker Desktop's Linux engine was unavailable, so
+  PostgreSQL migrations on the deployed database, Kafka/Redis service
+  integration, real worker processing, and Compose startup remain
+  **UNVERIFIED**. Production still requires external HTTPS termination,
+  operational secret management, production-specific CORS origins, and
+  deployment hardening beyond the local Compose template.

@@ -19,6 +19,7 @@ from aetherflow.config.settings import Settings
 from aetherflow.infrastructure.database.models import (
     ApiKey,
     AuditEventType,
+    RefreshSession,
     User,
     UserStatus,
     utc_now,
@@ -42,8 +43,22 @@ async def _user_from_access_token(session: AsyncSession, settings: Settings, tok
         if payload.get("typ") != "access":
             raise InvalidTokenError("wrong token type")
         user_id = UUID(str(payload["sub"]))
+        family_id = UUID(str(payload["sid"])) if "sid" in payload else None
     except (InvalidTokenError, ValueError, KeyError, TypeError) as exc:
         raise _unauthenticated() from exc
+    if family_id is not None:
+        active_session = await session.scalar(
+            select(RefreshSession.id)
+            .where(
+                RefreshSession.family_id == family_id,
+                RefreshSession.rotated_at.is_(None),
+                RefreshSession.revoked_at.is_(None),
+                RefreshSession.expires_at > utc_now(),
+            )
+            .limit(1)
+        )
+        if active_session is None:
+            raise _unauthenticated()
     user = await session.scalar(
         select(User).options(selectinload(User.roles)).where(User.id == user_id)
     )
@@ -90,7 +105,7 @@ async def require_admin(
     session: Session,
     user: Annotated[User, Depends(require_authenticated_user)],
 ) -> User:
-    if not any(role.name == "ADMIN" for role in user.roles):
+    if is_demo_user(user) or not any(role.name == "ADMIN" for role in user.roles):
         await write_audit(
             session,
             AuditEventType.AUTHORIZATION_DENIED,
@@ -101,4 +116,14 @@ async def require_admin(
         )
         await session.commit()
         raise ApiError("FORBIDDEN", "You do not have permission to perform this action.", 403)
+    return user
+
+
+def is_demo_user(user: User) -> bool:
+    return any(role.name == "DEMO" for role in user.roles)
+
+
+def require_non_demo_user(user: Annotated[User, Depends(require_authenticated_user)]) -> User:
+    if is_demo_user(user):
+        raise ApiError("DEMO_READ_ONLY", "Demo accounts are read-only.", 403)
     return user

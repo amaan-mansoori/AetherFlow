@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Architecture / Specification Phase; Phase 6 execution retry implemented
+**Status:** Phase 15 implementation; registration and restricted recruiter demo integrated
 
 ## Decision summary
 
@@ -10,6 +10,7 @@ AetherFlow starts as a modular monolith with independently runnable API, schedul
 
 - **Next.js console:** authenticated operator and developer UI; consumes versioned API only.
 - **FastAPI API:** authentication, authorization, validation, idempotent submission, query APIs, cancellation, and operational endpoints.
+- **Identity and demo provisioning:** public registration remains USER-only; trusted operator commands assign ADMIN or provision a read-only DEMO identity without introducing a separate user store.
 - **Retry dispatcher:** the existing outbox publisher identifies due retry intents; no general-purpose scheduler is introduced.
 - **Worker:** Kafka consumer-group process; claims jobs, calls provider abstraction, validates output, persists attempts/results, and emits lifecycle events.
 - **PostgreSQL:** authoritative users, jobs, attempts, results, events, workers, audit data, and idempotency records.
@@ -271,3 +272,18 @@ performs the authoritative versioned CAS transition. The successful mutation
 and its safe audit record are committed in the same transaction. Manual retry
 is intentionally not exposed because no existing state transition can express
 it without bypassing durable retry policy.
+
+## Phase 14 operations console
+
+`frontend/` is a Next.js App Router and TypeScript client for authenticated
+users and administrators. It calls the versioned FastAPI API directly; it does
+not contain job transition, retry, scheduling, or authorization rules. A
+central API client adds bearer access tokens from memory, uses credentialed
+requests for the backend's HttpOnly refresh cookie, maps the common error
+envelope, and retries a protected request once after a successful refresh.
+
+The console uses bounded job pages and bounded event/attempt history pages.
+Execution polling is centralized per open detail page, pauses while the tab is
+hidden, stops for terminal states, and uses abortable requests. It makes no
+WebSocket or worker-registry claim. The overview labels its counts as a recent
+visible-job sample because the API exposes no job count endpoint.

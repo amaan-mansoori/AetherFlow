@@ -1,11 +1,11 @@
 """Lifecycle-safe Redis coordination primitives."""
 
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
-from redis.asyncio import Redis  # type: ignore[import-not-found]
-from redis.asyncio.connection import ConnectionPool  # type: ignore[import-not-found]
+from redis.asyncio import Redis
+from redis.asyncio.connection import Connection, ConnectionPool
 
 from aetherflow.config.settings import Settings
 
@@ -36,18 +36,16 @@ class RateLimitStore(Protocol):
 class RedisRateLimitStore:
     """Redis-backed fixed-window store with bounded pooled connections."""
 
-    def __init__(self, client: Redis) -> None:
+    def __init__(self, client: Redis[bytes]) -> None:
         self._client = client
 
     async def check(self, key: str, limit: int, window_seconds: int) -> RateLimitDecision:
-        raw = await cast(
-            Awaitable[object],
-            self._client.eval(
-                _RATE_LIMIT_SCRIPT,
-                1,
-                key,
-                str(window_seconds),
-            ),
+        eval_fn = cast(Callable[..., Awaitable[object]], self._client.eval)
+        raw = await eval_fn(
+            _RATE_LIMIT_SCRIPT,
+            1,
+            key,
+            str(window_seconds),
         )
         if (
             not isinstance(raw, list)
@@ -68,14 +66,14 @@ class RedisClient:
     """Own one Redis pool for an application process."""
 
     def __init__(self, settings: Settings) -> None:
-        self._pool = ConnectionPool.from_url(
+        self._pool: ConnectionPool[Connection] = ConnectionPool.from_url(
             settings.redis_url,
             max_connections=settings.redis_max_connections,
             socket_connect_timeout=settings.redis_connect_timeout_seconds,
             socket_timeout=settings.redis_socket_timeout_seconds,
             decode_responses=False,
         )
-        self._client: Redis = Redis(connection_pool=self._pool)
+        self._client: Redis[bytes] = Redis(connection_pool=self._pool)
         self.rate_limits = RedisRateLimitStore(self._client)
 
     async def ping(self) -> bool:
@@ -86,7 +84,11 @@ class RedisClient:
     async def close(self) -> None:
         """Close the client and its connection pool."""
 
-        await self._client.aclose()
+        close_fn = cast(
+            Callable[[], Awaitable[None]],
+            cast(Any, self._client).aclose,
+        )
+        await close_fn()
 
 
 def create_redis_client(settings: Settings) -> RedisClient:

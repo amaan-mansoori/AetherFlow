@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aetherflow.api.dependencies import get_request_db_session
-from aetherflow.auth.policies import require_authenticated_user
+from aetherflow.auth.policies import require_authenticated_user, require_non_demo_user
 from aetherflow.auth.schemas import ApiKeyCreatedResponse, ApiKeyCreateRequest, ApiKeyResponse
 from aetherflow.auth.service import create_api_key, revoke_api_key
 from aetherflow.infrastructure.database.models import ApiKey, User
@@ -16,6 +16,7 @@ from aetherflow.observability.context import get_request_id
 router = APIRouter(prefix="/api/v1/api-keys", tags=["api-keys"])
 db_session = Depends(get_request_db_session)
 authenticated_user = Depends(require_authenticated_user)
+non_demo_user = Depends(require_non_demo_user)
 
 
 def _metadata(key: ApiKey) -> dict[str, object]:
@@ -32,7 +33,7 @@ def _metadata(key: ApiKey) -> dict[str, object]:
 @router.post("", response_model=ApiKeyCreatedResponse, status_code=201)
 async def create_key(
     payload: ApiKeyCreateRequest,
-    user: User = authenticated_user,
+    user: User = non_demo_user,
     session: AsyncSession = db_session,
 ) -> dict[str, object]:
     key, secret = await create_api_key(session, user, payload.name, get_request_id())
@@ -53,7 +54,7 @@ async def list_keys(
 @router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_key(
     key_id: UUID,
-    user: User = authenticated_user,
+    user: User = non_demo_user,
     session: AsyncSession = db_session,
 ) -> None:
     await revoke_api_key(session, user, key_id, get_request_id())

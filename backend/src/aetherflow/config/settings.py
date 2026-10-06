@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     refresh_cookie_name: str = "aetherflow_refresh"
     secure_cookies: bool = False
     refresh_cookie_domain: str | None = None
+    demo_enabled: bool = False
     logging_level: str = "INFO"
     cors_origins: list[str] = Field(default_factory=list)
     kafka_enabled: bool = False
@@ -56,7 +57,11 @@ class Settings(BaseSettings):
     scheduler_batch_size: int = Field(default=100, ge=1, le=1000)
     scheduler_id: str = Field(default="aetherflow-scheduler", min_length=1, max_length=128)
     provider_default: str = Field(default="mock", min_length=1, max_length=64)
-    provider_openai_api_key: str | None = Field(default=None, min_length=1)
+    provider_openai_api_key: str | None = Field(
+    default=None,
+    min_length=1,
+    validate_default=True,
+)
     provider_openai_base_url: str = "https://api.openai.com/v1"
     provider_openai_max_connections: int = Field(default=10, ge=1, le=100)
     provider_openai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)
@@ -76,6 +81,13 @@ class Settings(BaseSettings):
         if normalized not in {"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"}:
             raise ValueError("logging_level must be a standard Python logging level")
         return normalized
+
+    @field_validator("provider_openai_api_key", mode="before")
+    @classmethod
+    def normalize_empty_openai_api_key(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @field_validator("provider_default")
     @classmethod

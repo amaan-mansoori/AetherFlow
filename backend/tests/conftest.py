@@ -43,7 +43,7 @@ async def app(test_settings: Settings) -> AsyncIterator[FastAPI]:
         async with app.state.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         async with app.state.session_factory() as session:
-            session.add_all([Role(name="USER"), Role(name="ADMIN")])
+            session.add_all([Role(name="USER"), Role(name="ADMIN"), Role(name="DEMO")])
             await session.commit()
         yield app
 

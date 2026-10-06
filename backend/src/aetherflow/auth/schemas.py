@@ -41,6 +41,11 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
+class DemoAccessStatus(BaseModel):
+    available: bool
+    access_mode: str = "read-only"
+
+
 class ApiKeyCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
