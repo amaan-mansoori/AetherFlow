@@ -109,6 +109,7 @@ def test_openai_provider_requires_key_when_selected() -> None:
 
     with pytest.raises(ValueError, match="provider_openai_api_key"):
         Settings(
+            _env_file=None,
             environment="test",
             database_url="sqlite+aiosqlite:///:memory:",
             jwt_secret_key="x" * 40,

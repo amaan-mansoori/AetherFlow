@@ -1,23 +1,28 @@
 # Architecture
 
-**Status:** Phase 15 implementation; registration and restricted recruiter demo integrated
+**Status:** Current implementation; registration and restricted recruiter demo integrated
 
 ## Decision summary
 
-AetherFlow starts as a modular monolith with independently runnable API, scheduler capability, and worker processes. Modules share contracts and a PostgreSQL database but are separated by runtime responsibility where scaling and failure isolation justify it. The scheduler may initially run inside the backend process and must retain an interface that permits later extraction.
+AetherFlow is a modular monolith with independently runnable API, scheduler,
+outbox-publisher, and worker processes. They share contracts and PostgreSQL
+but are separated by runtime responsibility where failure isolation and
+independent scaling justify it. The scheduler is already a separate process;
+the backend codebase remains shared.
 
 ## Components
 
 - **Next.js console:** authenticated operator and developer UI; consumes versioned API only.
 - **FastAPI API:** authentication, authorization, validation, idempotent submission, query APIs, cancellation, and operational endpoints.
 - **Identity and demo provisioning:** public registration remains USER-only; trusted operator commands assign ADMIN or provision a read-only DEMO identity without introducing a separate user store.
-- **Retry dispatcher:** the existing outbox publisher identifies due retry intents; no general-purpose scheduler is introduced.
-- **Worker:** Kafka consumer-group process; claims jobs, calls provider abstraction, validates output, persists attempts/results, and emits lifecycle events.
-- **PostgreSQL:** authoritative users, jobs, attempts, results, events, workers, audit data, and idempotency records.
-- **Kafka:** durable job dispatch and lifecycle event transport; not current-state storage.
-- **Redis:** configurable rate limits, short-lived cache, and narrowly justified coordination.
+- **Outbox publisher:** leases durable dispatch intents and publishes them to Kafka; it also makes due retry intents eligible.
+- **Scheduler:** activates due one-shot scheduled jobs in PostgreSQL and creates their normal outbox intent; it does not publish to Kafka.
+- **Worker:** Kafka consumer-group process; claims jobs, calls provider abstraction, validates output, and persists attempts, results, and lifecycle events in PostgreSQL.
+- **PostgreSQL:** authoritative identity, jobs, attempts, results, events, audit data, idempotency records, and dispatch intents.
+- **Kafka:** durable job-dispatch transport; not current-state storage or a lifecycle event stream.
+- **Redis:** optional API rate-limit counters; job correctness and durable state do not depend on it.
 - **Provider adapter:** normalized AI interface with external and mock implementations.
-- **Telemetry stack:** OpenTelemetry instrumentation, Prometheus metrics, Grafana dashboards, structured logs.
+- **Observability:** structured application logs and Prometheus-compatible application metrics; no OpenTelemetry collector or Grafana deployment is included.
 
 ## Boundaries
 
@@ -197,7 +202,11 @@ duplicates and out-of-order events; PostgreSQL remains authoritative.
 
 ## Redis contract
 
-Keys use namespaced, versioned formats such as `aetherflow:v1:ratelimit:user:{id}:{window}` and `aetherflow:v1:cache:job:{id}`. Rate-limit keys expire at the window boundary. Cache entries have short configurable TTLs, are invalidated on job mutation where practical, and are never used to authorize access. Redis unavailability follows the Phase 11 non-critical rate-limit policy: rate limiting fails open, cache reads miss, durable reads continue, and durable mutations never depend on Redis.
+The API uses Redis for optional fixed-window rate limiting with an atomic Lua
+increment and expiration. Redis keys contain rate-limit identity/window data,
+not job results. When Redis is unavailable, the configured policy fails open;
+this means request limits are not enforced during that degraded interval.
+Workers and the outbox publisher do not depend on Redis.
 
 ## Scaling
 
@@ -207,7 +216,7 @@ API replicas scale on request load; worker replicas scale by Kafka consumer-grou
 
 The production cloud is an open decision until Phase 1 constraints and cost are reviewed. Only one provider will be selected. Kubernetes manifests will be the initial deployment format; Helm is deferred unless repeated environment templating proves its value.
 
-## Phase 10 validation status
+## Local runtime verification
 
 The intended production-like path remains:
 
@@ -216,10 +225,11 @@ API -> PostgreSQL -> transactional outbox -> OutboxPublisher -> Kafka
     -> Worker -> ProviderExecutor -> PostgreSQL result/state -> acknowledgement
 ```
 
-Phase 10 does not change this architecture. Docker's Linux engine was
-unavailable during validation, so the PostgreSQL/Kafka runtime path and
-Compose E2E are **UNVERIFIED**. Existing SQLite/fake-client tests remain
-deterministic component verification only.
+In the current workspace, the Compose API readiness endpoint reported the
+database ready, and a mock-provider job was observed through the live local
+API, Kafka, worker, and persisted-result path. A transient mock failure also
+reached retry exhaustion. These single-job smoke checks do not establish
+concurrency safety, production readiness, or exactly-once execution.
 
 ## Phase 11 responsibility split
 
@@ -255,8 +265,10 @@ locking.
 
 Initial scheduling is distinct from execution retry: retry intents remain
 `RETRY_SCHEDULED` with `available_at` and continue to be handled by the
-existing outbox publisher. Cancellation of a future `ACCEPTED` job wins by
-the existing CAS transition, and the scheduler only selects `ACCEPTED` rows.
+existing outbox publisher. A scheduled job still in `ACCEPTED` has not been
+claimed for execution; cancellation moves it directly to `CANCELLED`, and any
+published message is rejected as stale by the worker. Compare-and-set and
+scheduler selection of `ACCEPTED` prevent later activation.
 
 ## Phase 13 administrative control plane
 

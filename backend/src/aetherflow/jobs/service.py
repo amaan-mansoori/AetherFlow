@@ -200,7 +200,7 @@ async def cancel_job(
     request_id: str | None = None,
     audit_admin_action: bool = False,
 ) -> Job:
-    """Request job cancellation via the authoritative state machine."""
+    """Cancel unclaimed scheduled work or request cancellation of dispatched work."""
     query = (
         select(Job)
         .options(selectinload(Job.result), selectinload(Job.attempts))
@@ -214,7 +214,7 @@ async def cancel_job(
         raise ApiError("NOT_FOUND", "Job not found.", 404)
 
     # Idempotent repeated cancellation
-    if job.state == JobState.CANCEL_REQUESTED:
+    if job.state in {JobState.CANCEL_REQUESTED, JobState.CANCELLED}:
         return job
 
     # Terminal state cancellation forbidden
@@ -225,13 +225,19 @@ async def cancel_job(
             409,
         )
 
-    # Validate transition through state machine
-    validate_transition(job.state, JobState.CANCEL_REQUESTED)
+    # Scheduled work still in ACCEPTED has not been claimed; any dispatched
+    # message becomes a stale no-op after the terminal transition.
+    target_state = (
+        JobState.CANCELLED
+        if job.state == JobState.ACCEPTED and job.schedule_at is not None
+        else JobState.CANCEL_REQUESTED
+    )
+    validate_transition(job.state, target_state)
 
     return await transition_job_state(
         session,
         job_id,
-        JobState.CANCEL_REQUESTED,
+        target_state,
         actor=f"user:{user.id}",
         payload={"request_id": request_id, "reason": "user_cancellation_request"},
         expected_version=job.version,
@@ -317,7 +323,7 @@ async def transition_job_state(
                 context={
                     "operation": "cancel_job",
                     "target_job_id": str(job.id),
-                    "result": "CANCEL_REQUESTED",
+                    "result": str(target_state),
                 },
             )
         )

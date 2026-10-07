@@ -266,14 +266,16 @@ async def test_scheduler_ignores_not_due_and_is_duplicate_safe(app) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancellation_before_due_is_not_resurrected(app) -> None:
+async def test_cancellation_before_due_is_terminal_and_not_resurrected(app) -> None:
     now = datetime.now(UTC)
     job, user, _ = await create_scheduled_job(
         app, "cancel-schedule@example.com", now + timedelta(hours=1)
     )
     async with app.state.session_factory() as session:
         cancelled = await cancel_job(session, user, job.id)
-        assert cancelled.state == JobState.CANCEL_REQUESTED
+        assert cancelled.state == JobState.CANCELLED
+        repeated = await cancel_job(session, user, job.id)
+        assert repeated.state == JobState.CANCELLED
 
     scheduler = DurableScheduler(
         app.state.session_factory,
@@ -283,12 +285,61 @@ async def test_cancellation_before_due_is_not_resurrected(app) -> None:
     assert await scheduler.poll_once() == []
     async with app.state.session_factory() as session:
         stored = await session.get(Job, job.id)
-        assert stored is not None and stored.state == JobState.CANCEL_REQUESTED
+        assert stored is not None and stored.state == JobState.CANCELLED
         assert (
             await session.scalar(
                 select(func.count())
                 .select_from(OutboxDispatch)
                 .where(OutboxDispatch.job_id == job.id)
+            )
+            == 0
+        )
+        event_types = list(
+            await session.scalars(select(JobEvent.event_type).where(JobEvent.job_id == job.id))
+        )
+        assert event_types == ["JOB_ACCEPTED", "STATE_CHANGED_TO_CANCELLED"]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_due_schedule_dispatch_is_acknowledged_without_execution(app) -> None:
+    job, user, _ = await create_scheduled_job(
+        app,
+        "cancelled-due-schedule@example.com",
+        datetime.now(UTC) - timedelta(seconds=1),
+    )
+    dispatcher = LocalDispatcher()
+    publisher = OutboxPublisher(app.state.session_factory, dispatcher)
+    assert await publisher.publish_once() is not None
+
+    async with app.state.session_factory() as session:
+        cancelled = await cancel_job(session, user, job.id)
+        assert cancelled.state == JobState.CANCELLED
+
+    from aetherflow.jobs.providers import create_default_provider_executor
+
+    executor = create_default_provider_executor(app.state.settings)
+    try:
+        result = await Worker(
+            app.state.session_factory,
+            dispatcher,
+            executor,
+            worker_id="cancelled-schedule-worker",
+        ).run_once()
+    finally:
+        await executor.close()
+
+    assert result.status == WorkerResultStatus.INELIGIBLE
+    async with app.state.session_factory() as session:
+        stored = await session.get(Job, job.id)
+        assert stored is not None and stored.state == JobState.CANCELLED
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(JobEvent)
+                .where(
+                    JobEvent.job_id == job.id,
+                    JobEvent.next_state == JobState.RUNNING,
+                )
             )
             == 0
         )

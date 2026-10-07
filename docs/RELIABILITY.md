@@ -1,6 +1,6 @@
 # Reliability
 
-**Status:** Architecture / Specification Phase
+**Status:** Current implementation behavior; unverified infrastructure limits are called out below
 
 Reliability is based on durable state, explicit transitions, at-least-once processing, bounded retries, backpressure, health probes, and observable degradation.
 
@@ -11,6 +11,7 @@ Valid transitions:
 ```text
 ACCEPTED -> QUEUED
 ACCEPTED -> CANCEL_REQUESTED
+ACCEPTED -> CANCELLED (scheduled work not yet claimed)
 QUEUED -> RUNNING
 QUEUED -> CANCEL_REQUESTED
 QUEUED -> RETRY_SCHEDULED
@@ -142,13 +143,14 @@ scheduled retry; a due cancellation message is consumed only to complete
 acknowledged as ineligible. Retry exhaustion transitions to `FAILED`. Publication and
 execution remain at least once, and provider-side work may still occur more
 than once.
-## Phase 10 validation status
+## Local runtime verification
 
 Deterministic tests cover idempotency, stale versions, duplicate dispatch,
-retry scheduling, lease recovery, cancellation, and resource shutdown. Real
-PostgreSQL row-locking, Kafka offset/restart behavior, concurrent publisher
-claims, and the complete Compose path are **UNVERIFIED** because Docker's
-Linux engine was unavailable. No exactly-once claim is made.
+retry scheduling, lease recovery, cancellation, and resource shutdown. A local
+Compose smoke check has exercised mock-provider success, retry exhaustion, and
+due scheduling through PostgreSQL, Kafka, publisher, scheduler, and worker.
+PostgreSQL lock races, multi-process concurrency, broker restart/rebalance,
+and high availability remain unverified. No exactly-once claim is made.
 
 ## Phase 11 Redis outage policy
 
@@ -167,11 +169,13 @@ Due activation commits `ACCEPTED -> QUEUED`, its event, and a versioned outbox
 intent together. The outbox publisher then performs the normal Kafka path.
 The scheduler does not publish directly and does not use Redis.
 
-Cancellation before activation changes the job to `CANCEL_REQUESTED`; because
-the scheduler selects only `ACCEPTED`, it cannot resurrect that job. A crash
-before activation commit is rolled back. A crash after commit is recovered by
-the outbox lease/retry mechanism. Delivery and execution remain at least once,
-with no exactly-once claim.
+Cancellation while a scheduled job remains `ACCEPTED` transitions directly to
+`CANCELLED` because it has not been claimed for execution. A pending dispatch
+message becomes a worker no-op. A compare-and-set race with the scheduler
+prevents a cancelled job from being activated. A crash before activation
+commit is rolled back; a crash after commit is recovered by the outbox
+lease/retry mechanism. Delivery and execution remain at least once, with no
+exactly-once claim.
 
 ## Phase 13 administrative operations
 

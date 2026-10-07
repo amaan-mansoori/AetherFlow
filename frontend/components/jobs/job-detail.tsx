@@ -161,7 +161,12 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
         updatedState = detail.state;
       }
       setCancelOpen(false);
-      show("Cancellation request recorded by the API.", "success");
+      show(
+        updatedState === "CANCELLED" && acceptedScheduledJob
+          ? "Scheduled job cancelled before execution."
+          : "Cancellation request recorded by the API.",
+        "success",
+      );
       terminalRef.current = isTerminal(updatedState);
       refetch();
     } catch (reason) {
@@ -183,6 +188,8 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
   const currentPageAttempts = useMemo(() => data?.attempts ?? [], [data?.attempts]);
   const record = data?.job;
   const schedule = record ? isScheduled(record.state, record.schedule_at) : false;
+  const acceptedScheduledJob =
+    record?.state === "ACCEPTED" && record.schedule_at !== null;
   const result = data && !data.isAdmin ? data.job.result : null;
 
   const safeFailureSummary = useMemo(() => {
@@ -375,16 +382,24 @@ export function JobDetailClient({ jobId }: { jobId: string }) {
 
       <ConfirmDialog
         open={cancelOpen}
-        title="Request job cancellation?"
-        confirmLabel="Request cancellation"
+        title={acceptedScheduledJob
+          ? "Cancel scheduled job?"
+          : "Request job cancellation?"}
+        confirmLabel={acceptedScheduledJob
+          ? "Cancel scheduled job"
+          : "Request cancellation"}
         busy={cancelling}
         danger
         onCancel={() => setCancelOpen(false)}
         onConfirm={() => void confirmCancel()}
       >
-        <p>This submits a cancellation request to the backend for:</p>
+        <p>{acceptedScheduledJob
+          ? "This scheduled job has not started executing. Cancelling it now prevents worker execution:"
+          : "This submits a cancellation request to the backend for:"}</p>
         <div className="mono" style={{ padding: 10, border: "1px solid var(--line)", borderRadius: 7, overflowWrap: "anywhere", color: "var(--text)" }}>{record.id}</div>
-        <p>The job may still finish if a provider call is already in flight. Its state will be refreshed from the authoritative API response.</p>
+        {!acceptedScheduledJob && (
+          <p>The job may still finish if a provider call is already in flight. Its state will be refreshed from the authoritative API response.</p>
+        )}
       </ConfirmDialog>
     </>
   );

@@ -1,6 +1,6 @@
 # Requirement Traceability
 
-**Status:** Implementation mapping through Phase 14
+**Status:** Implementation mapping through Phase 15
 **Format:** Requirement -> Component -> API -> Database -> Test -> Documentation
 
 | Requirement | Component | API | Database | Test | Documentation |
@@ -8,15 +8,15 @@
 | Authentication | API/auth | `/auth/*` | users, roles, user_roles | auth integration/API | API, SECURITY, TESTING |
 | API keys | API/auth | `/api-keys` | api_keys | key lifecycle/security | API, SECURITY |
 | Job submission | API/domain/Kafka | `POST /jobs` | jobs, idempotency_records | API/integration/concurrency | PRD, DATA-FLOW, DATABASE |
-| Idempotency | Domain/database | `POST /jobs` + header | idempotency_records | concurrent duplicate/mismatch | ARCHITECTURE, DATABASE, FAILURE-MATRIX |
+| Idempotency | Domain/database | `POST /jobs` + header | idempotency_records | replay/mismatch; concurrent DB race not verified | ARCHITECTURE, DATABASE, FAILURE-MATRIX |
 | State machine | Domain/worker | job actions | jobs, job_events | transition unit/API | RELIABILITY, API |
 | Worker execution | Worker/Kafka/provider | job detail | jobs, job_attempts, job_results | worker integration/failure | DATA-FLOW, FAILURE-MATRIX |
 | Retry/dead letter | Worker/scheduler | retry action | attempts/events/jobs | provider failure matrix | RELIABILITY, FAILURE-MATRIX |
 | Cancellation | Domain/worker/provider | cancel endpoint | jobs, events, attempts | before/during execution | API, FAILURE-MATRIX |
-| Rate limiting/cache | Redis/API | all protected routes | none authoritative | Redis integration/degraded mode | ARCHITECTURE, SCALING |
-| Observability | All processes | metrics/health/admin | optional event metadata | telemetry smoke tests | OBSERVABILITY |
-| Console | Next.js/API | read/action APIs | read models/entities | E2E/accessibility | UI-UX, DESIGN-SYSTEM |
-| Deployment | Containers/Kubernetes | health endpoints | migrations | build/smoke/deploy | DEPLOYMENT, CI-CD |
+| Rate limiting | Redis/API | protected API routes | none authoritative | fixed-window/degraded-mode tests | ARCHITECTURE, SCALING |
+| Observability | Application processes | API health and process metrics | none authoritative | metrics and health tests | OBSERVABILITY |
+| Console | Next.js/API | read/action APIs | read models/entities | component/client tests | UI-UX, DESIGN-SYSTEM |
+| Deployment | Docker Compose; Kubernetes deferred | health endpoints | migrations | image/config/local smoke | DEPLOYMENT, CI-CD |
 | Performance evidence | Benchmark harness | measured API/workflow | telemetry | load/performance | PERFORMANCE, EVALUATION |
 
 ## Phase 1 implementation mapping
@@ -128,12 +128,13 @@ and Kafka integration/concurrency remain environment-gated.
 
 | Validation area | Evidence | Status |
 |---|---|---|
-| Existing unit/API/reliability suite | `backend/tests`, 115 passed | VERIFIED |
-| Formatting, lint, typing, diff checks | Ruff, mypy, `git diff --check` | VERIFIED |
-| Migration lifecycle | Isolated SQLite upgrade check | VERIFIED |
-| PostgreSQL/Kafka/Compose E2E | Docker Linux engine unavailable | UNVERIFIED |
+| Current unit/API/reliability suite | `backend/tests`, 150 passed | VERIFIED |
+| Ruff lint and mypy | Full backend checks | VERIFIED |
+| Ruff formatting | Full backend format check, 82 files | VERIFIED |
+| Migration lifecycle | Isolated SQLite migration tests | VERIFIED |
+| Local Compose job path | Existing stack: mock success, retry exhaustion, due schedule | LIMITED |
 | Real provider smoke | No credential supplied | UNVERIFIED |
-| Infrastructure concurrency/restart/shutdown | Requires PostgreSQL and Kafka runtime | UNVERIFIED |
+| PostgreSQL lock races, multi-process concurrency, broker restart | Not exercised by smoke run | UNVERIFIED |
 
 ## Phase 11 implementation mapping
 
@@ -150,10 +151,10 @@ and Kafka integration/concurrency remain environment-gated.
 | Requirement | Component | Deterministic evidence | Status |
 |---|---|---|---|
 | Durable one-shot schedule metadata | `Job.schedule_at`, migration `0006_durable_scheduling` | submission and migration tests | VERIFIED |
-| Atomic due activation | `jobs/scheduler.py` | due, CAS, duplicate, cancellation tests | VERIFIED |
+| Atomic due activation and undispatched cancellation | `jobs/scheduler.py`, `jobs/service.py` | due/CAS/duplicate/cancel/no-op dispatch tests | VERIFIED (SQLite) |
 | Existing outbox/Kafka bridge | scheduler + `OutboxDispatch` | versioned intent assertions | VERIFIED |
 | Independent scheduler lifecycle | `runtime/scheduler.py` | runtime/static checks | VERIFIED |
-| PostgreSQL row-locking and multi-process behavior | `FOR UPDATE SKIP LOCKED` | live PostgreSQL unavailable | UNVERIFIED |
+| PostgreSQL row-locking and multi-process behavior | `FOR UPDATE SKIP LOCKED` | smoke tested one due schedule only | UNVERIFIED |
 
 ## Phase 13 implementation mapping
 

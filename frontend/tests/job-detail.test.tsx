@@ -126,6 +126,31 @@ describe("job execution detail", () => {
     await waitFor(() => expect(screen.getByLabelText("State: CANCEL REQUESTED")).toBeInTheDocument());
   });
 
+  it("explains that a scheduled job is cancelled before execution", async () => {
+    const scheduledJob: JobDetail = {
+      ...userJob,
+      state: "ACCEPTED",
+      schedule_at: "2099-01-01T00:00:00Z",
+    };
+    mocks.detail
+      .mockResolvedValueOnce(scheduledJob)
+      .mockResolvedValue({ ...scheduledJob, state: "CANCELLED" });
+    mocks.cancel.mockResolvedValue({ ...scheduledJob, state: "CANCELLED" });
+    render(<JobDetailClient jobId="job-123" />);
+
+    expect(await screen.findByText("structured_inference")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel job" }));
+    expect(screen.getByRole("heading", { name: "Cancel scheduled job?" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel scheduled job" }));
+
+    await waitFor(() => expect(mocks.cancel).toHaveBeenCalledOnce());
+    expect(mocks.show).toHaveBeenCalledWith(
+      "Scheduled job cancelled before execution.",
+      "success",
+    );
+    await waitFor(() => expect(screen.getByLabelText("State: CANCELLED")).toBeInTheDocument());
+  });
+
   it("distinguishes persisted lifecycle states and marks the current observed state", async () => {
     mocks.detail.mockResolvedValue({ ...userJob, state: "FAILED" });
     mocks.events.mockResolvedValue([

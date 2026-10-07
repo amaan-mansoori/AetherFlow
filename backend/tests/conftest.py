@@ -22,7 +22,9 @@ from aetherflow.main import create_app
 @pytest.fixture
 def test_settings() -> Settings:
     return Settings(
+        _env_file=None,
         environment="test",
+        jwt_secret_key="test-secret-key-that-is-at-least-32-characters",
         database_url="sqlite+aiosqlite:///:memory:",
         cors_origins=["http://localhost:3000"],
         logging_level="WARNING",

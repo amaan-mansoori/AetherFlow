@@ -58,10 +58,10 @@ class Settings(BaseSettings):
     scheduler_id: str = Field(default="aetherflow-scheduler", min_length=1, max_length=128)
     provider_default: str = Field(default="mock", min_length=1, max_length=64)
     provider_openai_api_key: str | None = Field(
-    default=None,
-    min_length=1,
-    validate_default=True,
-)
+        default=None,
+        min_length=1,
+        validate_default=True,
+    )
     provider_openai_base_url: str = "https://api.openai.com/v1"
     provider_openai_max_connections: int = Field(default=10, ge=1, le=100)
     provider_openai_timeout_seconds: float = Field(default=60.0, gt=0, le=300)

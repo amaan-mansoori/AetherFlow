@@ -13,7 +13,7 @@ TERMINAL_STATES: frozenset[JobState] = frozenset(
 )
 
 VALID_TRANSITIONS: dict[JobState, frozenset[JobState]] = {
-    JobState.ACCEPTED: frozenset({JobState.QUEUED, JobState.CANCEL_REQUESTED}),
+    JobState.ACCEPTED: frozenset({JobState.QUEUED, JobState.CANCEL_REQUESTED, JobState.CANCELLED}),
     JobState.QUEUED: frozenset(
         {
             JobState.RUNNING,

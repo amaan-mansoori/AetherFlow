@@ -1,6 +1,6 @@
 # Database Specification
 
-**Status:** Architecture / Specification Phase  
+**Status:** Reflects the current SQLAlchemy models and Alembic migrations
 **Authority:** PostgreSQL is the source of truth.
 
 ## Entities
@@ -8,28 +8,41 @@
 | Entity | Purpose | Important fields and constraints |
 |---|---|---|
 | users | Identity | id, email (unique), password hash, status, timestamps |
-| roles | Role catalog | stable code (`USER`, `ADMIN`) |
+| roles | Role catalog | stable code (`USER`, `ADMIN`, `DEMO`) |
 | user_roles | Assignment | unique user/role pair, foreign keys |
 | api_keys | Programmatic auth | id, user_id, prefix, secure hash, name, last_used_at, revoked_at; never raw secret |
 | jobs | Durable work state | id, user_id, type, model, normalized input/config, priority, timeout, retry policy, optional UTC schedule_at, state, version, timestamps |
 | job_attempts | Execution history | job_id, attempt number unique pair, worker_id, provider/model, timestamps, error class, retry decision, usage, trace ID |
 | job_results | Validated output | job_id unique, schema version, output, usage, created_at |
 | job_events | Append-only lifecycle history | job_id, event type, prior/next state, actor, payload, timestamp |
-| workers | Worker registry | id, process version, status, capabilities, last heartbeat |
-| worker_heartbeats | Liveness history | worker_id, observed_at, load metadata |
 | audit_logs | Security/admin actions | actor, action, target, outcome, redacted metadata, timestamp |
 | idempotency_records | Submission deduplication | principal_id + key unique, fingerprint, job_id, response status, timestamps |
 | outbox_dispatches | Durable dispatch intent | unique job/version pair, schema/enqueue data, publication state, future eligibility, lease and bounded failure metadata |
 
-Phase 2 creates `users`, `roles`, `user_roles`, `refresh_sessions`, `api_keys`, and `audit_logs`. Phase 3 adds `jobs`, `idempotency_records`, `job_attempts`, `job_results`, and `job_events`. Phase 4C adds `outbox_dispatches`; Phase 4D/4E adds its publication state, retry schedule, classification, and timestamps. Phase 4F adds `jobs.execution_owner`, `jobs.execution_dispatch_version`, and `jobs.execution_lease_until` for restart recovery and stale-message protection. Phase 5 uses the existing job configuration and attempt provider/usage fields. Phase 6 migration `0005_execution_retry` adds `outbox_dispatches.available_at` and changes intent uniqueness to `(job_id, job_version)`, allowing durable future retry dispatches. Phase 12 migration `0006_durable_scheduling` adds nullable `jobs.schedule_at` and the due-job index. Provider credentials are runtime settings and are never stored in job configuration. The migrations seed exactly `USER` and `ADMIN`. Refresh token values are represented only by SHA-256 hashes; API key secrets are represented only by SHA-256 hashes and an indexed public ID.
+The versioned migrations create identity/session/API-key/audit tables, durable
+job and idempotency tables, execution attempts/results/events, and
+`outbox_dispatches`. Migration `0005_execution_retry` adds durable retry
+eligibility; `0006_durable_scheduling` adds nullable `jobs.schedule_at` and the
+due-job index; `0007_demo_role` adds `DEMO`. `0001_identity_access` seeds
+`USER` and `ADMIN`. Provider credentials are runtime settings and are never
+stored in job configuration. Refresh tokens are stored as SHA-256 hashes.
+API-key secrets are hashed; the public key identifier is stored for lookup.
 
 ## Relationships and lifecycle
 
-Users own jobs and API keys. Jobs own attempts, events, and at most one accepted result. Workers own heartbeats and may be referenced by attempts. Audit records are append-only. Deletion/retention policy is an open operational decision; no destructive cascade may silently remove audit history.
+Users own jobs, API keys, and refresh sessions. Jobs own attempts, events, and
+at most one result. Attempts record a worker identifier as text; there is no
+persisted worker registry or heartbeat table. Audit records are append-only.
+Deletion/retention policy is an open operational decision; no destructive
+cascade may silently remove audit history.
 
 ## Constraints and indexes
 
-Required uniqueness includes user email, API-key hash or identifier, idempotency principal/key, job/attempt number, and job result/job. Indexes should support user job listing by creation time, state/queue scheduling, attempts by job, events by job/time, workers by heartbeat, and audit time/actor. Additional indexes require measured query evidence.
+Required uniqueness includes user email, API-key hash or identifier,
+idempotency principal/key, job/attempt number, job result/job, and outbox
+job/version. Indexes support user job listing by creation time, due scheduling,
+attempts by job, events by job/time, and audit time/actor. Additional indexes
+require measured query evidence.
 
 Identity-specific indexes are email, role name, refresh token hash, refresh family and expiry, API-key public ID and active-user lookup, and audit event/actor/request/time. No plaintext credential is persisted.
 

@@ -1,21 +1,29 @@
 # Testing Strategy
 
-**Status:** Implementation and deterministic verification through Phase 15
+**Status:** Current test strategy and latest verified checks
 
 ## Layers
 
 - **Unit:** state machine, fingerprinting, retry classification/backoff, schema validation, authorization policies, provider adapters with fakes.
-- **Integration:** PostgreSQL migrations/repositories, Kafka publish/consume, Redis limits/cache, worker lifecycle.
-- **API/contract:** OpenAPI schemas, status codes, error envelope, auth/API-key behavior, idempotency concurrency.
-- **End-to-end:** login -> submit -> worker -> result -> polling -> cancellation/retry using Compose.
-- **Load/performance:** controlled mock-provider workloads measuring throughput and percentile latency.
-- **Security:** dependency/container scans, negative authorization tests, secret/log redaction, injection payloads.
+- **Component/integration-style:** SQLite/Alembic, injected Kafka/Redis/provider fakes, API and worker lifecycle behavior.
+- **API/contract:** OpenAPI schemas, status codes, error envelope, auth/API-key behavior, idempotency replay and conflict handling.
+- **Manual local smoke:** Compose-backed API, PostgreSQL, Kafka, publisher, scheduler, worker, and mock provider. This is separate from the automated SQLite/fake-based suite.
+- **Load/performance:** no reproducible benchmark harness is currently reported; do not infer throughput or latency from functional tests.
+- **Security:** negative authorization, ownership-isolation, and secret-redaction tests; automated dependency/container scanning is not configured here.
 
 ## Mandatory scenarios
 
-Duplicate submission, concurrent idempotency race, duplicate Kafka message, worker crash/restart, provider timeout/429/5xx, malformed output, broker/Redis/database outage, retry exhaustion, poison message, cancellation before and during provider call, and unauthorized access.
+Important targets include duplicate submission, concurrent idempotency races,
+duplicate Kafka messages, worker crash/restart, provider timeout/429/5xx,
+malformed output, broker/Redis/database outage, retry exhaustion, poison
+messages, cancellation before/during a provider call, and unauthorized access.
+These are target scenarios, not a claim that every infrastructure variant is
+automated in the current suite.
 
-CI uses the deterministic mock provider and isolated disposable dependencies. External provider tests are opt-in and never required for ordinary pull requests. Tests must assert observable outcomes rather than implementation details.
+The checked-in pull-request workflow uses the deterministic mock provider and
+the isolated test suite; it does not start external services. External
+provider tests are opt-in and are not required for ordinary pull requests.
+Tests should assert observable outcomes rather than implementation details.
 
 ## Phase 1 foundation coverage
 
@@ -100,12 +108,14 @@ claim external Prometheus scraping or infrastructure-level telemetry.
 
 ## Phase 10 production-like validation
 
-The complete pytest suite and static checks are deterministic validation.
-Compose-based PostgreSQL, Kafka, outbox, worker, shutdown, concurrency, and
-API-to-result E2E checks are run only when Docker is available; they are not
-substituted with SQLite or fake clients. Docker's Linux engine was unavailable
-in the current environment, so these checks are **UNVERIFIED**. Real-provider
-smoke testing is also **UNVERIFIED** because no credential was supplied.
+The suite remains deterministic validation; it does not substitute for
+infrastructure checks. A local Compose smoke check in this workspace observed
+API readiness, mock-provider success, retry exhaustion, and a due scheduled
+job reaching a persisted result through PostgreSQL/Kafka/publisher/scheduler/
+worker. The running stack was already present and was not rebuilt for the
+current source changes. PostgreSQL lock races, broker restart/rebalance,
+multi-process concurrency, and shutdown recovery remain unverified. No
+external provider credential was used.
 
 ## Phase 11 Redis coverage
 
@@ -156,28 +166,25 @@ role/redaction behavior, command-palette keyboard navigation, registration
 validation and signed-out success, demo availability/read-only labeling, and
 safe post-login return destinations.
 
-Phase 14 verification (historical): frontend lint, TypeScript, component tests,
-and production build passed; 135 backend tests passed; Ruff passed; changed
-backend modules passed mypy; full mypy reported two Redis typing errors in
-`infrastructure/redis.py`. The Docker Linux engine was unavailable, so its live
-Compose checks were **UNVERIFIED**. Browser checks exercised the earlier
-operations console against disposable SQLite and validated console routes, not
-worker or production integration.
+## Latest workspace verification
 
-Phase 15 acceptance verification (2026-10-04): all 149 backend tests passed;
-Ruff format/check passed; mypy passed for the nine changed backend source
-modules. Full `mypy backend/src` still reports the two existing errors in
-`infrastructure/redis.py` (`_pool` annotation and `Redis.aclose`). All 31
-frontend tests, ESLint, TypeScript, and the production build passed. Disposable
-SQLite/Alembic verification passed upgrade to head, preservation of a
-pre-existing user, guarded downgrade while DEMO is assigned, downgrade after
-unassignment, and re-upgrade.
+The following checks were run for the current working tree:
 
-Browser verification against a disposable SQLite-backed API with Kafka, Redis,
-and the scheduler disabled confirmed registration remains signed out, login,
-refresh-cookie session restoration after reload, logout invalidation, protected
-route redirect after logout, demo availability/read-only explanation, and the
-DEMO account's own sample records. Registration and demo were checked at 375px
-without horizontal overflow. PostgreSQL, Kafka, Redis, worker execution, and
-full Compose integration were **UNVERIFIED** because Docker Desktop's Linux
-engine was unavailable. No external provider credentials were supplied.
+- Backend `pytest tests -q`: **150 passed**. The run emitted 1,144
+  `pytest-asyncio` deprecation warnings concerning event-loop policy APIs.
+- Full backend Ruff lint: passed.
+- Full backend mypy: **57 source files passed**.
+- Full backend `ruff format --check .`: passed for all 82 files.
+- Frontend Vitest: **32 tests passed**; ESLint, TypeScript, and production
+  build passed.
+- `docker compose config --quiet`: passed without printing resolved
+  environment values.
+- `git diff --check`: passed.
+- GitHub Actions workflow syntax and hosted execution have not been verified
+  by a GitHub run for this uncommitted change.
+
+The future-schedule cancellation regression is covered by the SQLite/API
+service test and a frontend confirmation test. That behavior has not been
+retested against a freshly rebuilt Compose stack. Live provider calls,
+PostgreSQL locking/concurrency, and restart/rebalance behavior remain
+unverified.

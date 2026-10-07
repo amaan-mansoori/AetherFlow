@@ -14,23 +14,33 @@ def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_wildcard_cors_is_rejected() -> None:
     with pytest.raises(ValidationError):
-        Settings(database_url="sqlite+aiosqlite:///:memory:", cors_origins=["*"])
+        Settings(
+            _env_file=None,
+            database_url="sqlite+aiosqlite:///:memory:",
+            cors_origins=["*"],
+        )
 
 
 def test_logging_level_is_normalized() -> None:
-    settings = Settings(database_url="sqlite+aiosqlite:///:memory:", logging_level="debug")
+    settings = Settings(
+        _env_file=None,
+        database_url="sqlite+aiosqlite:///:memory:",
+        logging_level="debug",
+    )
     assert settings.logging_level == "DEBUG"
 
 
 def test_production_requires_kafka_and_secure_cookies() -> None:
     with pytest.raises(ValidationError):
         Settings(
+            _env_file=None,
             environment="production",
             database_url="postgresql+asyncpg://user:pass@localhost/db",
             jwt_secret_key="x" * 40,
         )
 
     settings = Settings(
+        _env_file=None,
         environment="production",
         database_url="postgresql+asyncpg://user:pass@localhost/db",
         jwt_secret_key="x" * 40,

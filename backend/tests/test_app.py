@@ -33,6 +33,7 @@ async def test_readiness_with_database(client: AsyncClient) -> None:
 async def test_readiness_returns_not_ready_when_database_is_unavailable() -> None:
     app = create_app(
         Settings(
+            _env_file=None,
             environment="test",
             database_url="sqlite+aiosqlite:///C:/path-that-does-not-exist/aetherflow.db",
             logging_level="WARNING",

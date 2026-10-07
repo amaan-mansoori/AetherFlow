@@ -32,6 +32,7 @@ class FakeRedis:
 
 def settings(**overrides: Any) -> Settings:
     return Settings(
+        _env_file=None,
         environment="test",
         database_url="sqlite+aiosqlite:///:memory:",
         jwt_secret_key="test-secret-key-that-is-at-least-32-characters",

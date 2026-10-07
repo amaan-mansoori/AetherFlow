@@ -1,0 +1,3 @@
+# Optional PDF text/link inspection; the PDF builder itself uses the standard library.
+pypdf>=5.0,<7
+pymupdf>=1.24,<2

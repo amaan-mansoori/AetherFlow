@@ -22,7 +22,7 @@ from aetherflow.infrastructure.database.models import (
 )
 from aetherflow.infrastructure.database.session import create_engine, create_session_factory
 from aetherflow.jobs.schemas import JobCreateRequest
-from aetherflow.jobs.service import cancel_job, submit_job
+from aetherflow.jobs.service import submit_job, transition_job_state
 
 PROVISIONING_REQUEST_ID = "trusted-demo-provisioner"
 FIXTURE_SCHEDULE = datetime(2099, 1, 1, tzinfo=UTC)
@@ -85,12 +85,15 @@ async def provision_demo(session: AsyncSession, *, enabled: bool, password: str 
         label="Cancellation-request demo fixture",
         prompt="Seeded demonstration record. No provider execution is claimed.",
     )
+    # Preserve a read-only pending-cancellation example without invoking the
+    # user-facing scheduled-job cancellation behavior.
     if cancel_requested.state == JobState.ACCEPTED:
-        cancel_requested = await cancel_job(
+        cancel_requested = await transition_job_state(
             session,
-            user,
             cancel_requested.id,
-            request_id=PROVISIONING_REQUEST_ID,
+            JobState.CANCEL_REQUESTED,
+            actor="trusted-demo-provisioner",
+            payload={"reason": "read_only_demo_fixture"},
         )
     if scheduled.state != JobState.ACCEPTED or cancel_requested.state != JobState.CANCEL_REQUESTED:
         raise RuntimeError(

@@ -122,7 +122,7 @@ frontend runs separately with Node.js.
 
 - Git
 - Docker Engine with the Docker Compose plugin
-- Node.js and npm compatible with the versions in the frontend lockfile
+- Node.js 20.9 or newer and npm (required by the installed Next.js 16 release)
 - For backend development and tests outside Docker: Python 3.12 or newer
 
 You do not need to install PostgreSQL, Kafka, or Redis separately for the
@@ -297,7 +297,7 @@ Job records are scoped to their owner; ADMIN access is separate.
 | `POST /api/v1/jobs`, `GET /api/v1/jobs` | Submit a job or list the authenticated user's jobs. |
 | `GET /api/v1/jobs/{job_id}` | Read an owned job; another user's job is not disclosed. |
 | `GET /api/v1/jobs/{job_id}/attempts`, `GET /api/v1/jobs/{job_id}/events` | Read an owned job's attempts or lifecycle events; optional bounded pagination. |
-| `POST /api/v1/jobs/{job_id}/cancel` | Request cancellation, subject to role and state-transition rules. |
+| `POST /api/v1/jobs/{job_id}/cancel` | Cancel a scheduled job still in `ACCEPTED` immediately; otherwise request cancellation through the worker lifecycle. |
 | `POST /api/v1/api-keys`, `GET /api/v1/api-keys`, `DELETE /api/v1/api-keys/{key_id}` | Create, list, or revoke the caller's API keys. A newly created secret is returned once. |
 | `GET /api/v1/admin/jobs`, `GET /api/v1/admin/jobs/{job_id}`, `POST /api/v1/admin/jobs/{job_id}/cancel` | ADMIN-only bounded inspection and audited cancellation. There is no admin retry/requeue endpoint. |
 
@@ -382,9 +382,9 @@ as a public service.
 
 ## Tests and code quality
 
-Run backend checks from `backend` after installing the `dev` extra. Running
-from that directory also keeps a repository-root `.env` out of the test
-process's settings lookup:
+Run backend checks from `backend` after installing the `dev` extra. Test
+settings explicitly disable dotenv loading; a local `.env` is not needed by the
+deterministic test suite:
 
 ```powershell
 Set-Location backend
@@ -413,10 +413,10 @@ Compose integration should be tested separately against its real services;
 never infer it from the deterministic tests. See the detailed
 [testing guide](docs/TESTING.md).
 
-There is no GitHub Actions workflow in the repository at this revision, so
-pull-request CI is not configured here. In the current worktree, the full Ruff
-format check reports an existing formatting difference in
-`src/aetherflow/config/settings.py`; Ruff lint and mypy are separate checks.
+GitHub Actions is configured to run backend tests, Ruff, mypy, frontend tests,
+ESLint, TypeScript, the production build, and Compose configuration validation
+on pull requests and pushes to `master`. The workflow itself has not yet been
+observed running on GitHub for these uncommitted changes.
 
 ## Demo and screenshots
 
@@ -466,6 +466,7 @@ See [known limitations](docs/KNOWN-LIMITATIONS.md) and the
 
 ```text
 .
+├── .github/workflows/            # Pull-request quality gates
 ├── backend/
 │   ├── migrations/versions/       # Versioned Alembic schema changes
 │   ├── src/aetherflow/
@@ -487,8 +488,12 @@ See [known limitations](docs/KNOWN-LIMITATIONS.md) and the
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── API.md                     # API contract detail
+│   ├── DATA-FLOW.md               # Job, outbox, retry, and auth diagrams
+│   ├── DEVELOPMENT.md             # Contributor setup and quality checks
+│   ├── OPERATIONS.md              # Local Compose operations
 │   ├── TESTING.md                 # Test strategy and verification status
-│   └── KNOWN-LIMITATIONS.md       # Operational and product limitations
+│   ├── KNOWN-LIMITATIONS.md       # Operational and product limitations
+│   └── TROUBLESHOOTING.md         # Common local setup/runtime failures
 ├── docker-compose.yml             # Local multi-process stack
 ├── Dockerfile                     # Backend runtime image
 └── README.md
@@ -519,5 +524,10 @@ owner before granting reuse rights.
 - [Issues](https://github.com/amaan-mansoori/AetherFlow/issues)
 - [API reference](docs/API.md)
 - [Architecture and ADRs](docs/ARCHITECTURE.md)
+- [Data-flow diagrams](docs/DATA-FLOW.md)
+- [Database and migrations](docs/DATABASE.md)
+- [Development guide](docs/DEVELOPMENT.md)
+- [Local operations](docs/OPERATIONS.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Testing guide](docs/TESTING.md)
 - [Known limitations](docs/KNOWN-LIMITATIONS.md)

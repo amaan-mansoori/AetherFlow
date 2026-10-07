@@ -60,6 +60,11 @@ future value creates durable `ACCEPTED` work without an outbox dispatch until
 the timestamp is due. A value at or before the current UTC time is immediately
 outbox-eligible. The scheduler is internal; there is no public scheduler
 endpoint. Reusing an idempotency key with a different schedule is a conflict.
+Cancelling a scheduled job while it remains `ACCEPTED` moves it directly to
+terminal `CANCELLED` because it has not been claimed for execution; a pending
+dispatch message is treated as stale by the worker. Repeated cancellation is
+idempotent. Immediate submissions and jobs that have moved beyond `ACCEPTED`
+use `CANCEL_REQUESTED` and are finalized by the worker when possible.
 
 The first workload is a bounded structured inference operation: a typed input object is submitted with an explicit output schema/version selected by `job_type`. The provider adapter is selected by the runtime-configured provider registry and returns normalized text/structured content and usage metadata; the domain validates the content against the job type's schema before creating `job_results`. Provider credentials are not accepted in job configuration. Arbitrary tools, URLs, code, shell commands, and autonomous planning are not part of this contract.
 
