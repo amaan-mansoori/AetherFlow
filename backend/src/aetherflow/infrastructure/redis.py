@@ -1,5 +1,7 @@
 """Lifecycle-safe Redis coordination primitives."""
 
+from __future__ import annotations
+
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
